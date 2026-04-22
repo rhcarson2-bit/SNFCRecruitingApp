@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SNEFC Pro Scout - Master Edition</title>
+    <style>
+        :root { --snefc-blue: #004a99; --danger: #dc3545; --bg: #f0f4f8; }
+        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 15px; -webkit-tap-highlight-color: transparent; }
+        .app-container { max-width: 1400px; margin: auto; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 20px; }
+        
+        .mgmt-console { background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end; border: 1px solid #dee2e6; flex-wrap: wrap; }
+        .mgmt-group { display: flex; flex-direction: column; gap: 5px; min-width: 160px; }
+        .mgmt-group label { font-size: 10px; font-weight: bold; color: #495057; text-transform: uppercase; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--snefc-blue); padding-bottom: 10px; margin-bottom: 20px; }
+        .controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+
+        .filter-section { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #eee; display: flex; flex-direction: column; gap: 12px; }
+        .filter-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .filter-label { font-size: 10px; font-weight: bold; color: #666; text-transform: uppercase; width: 85px; }
+        .filter-btn { padding: 8px 14px; border-radius: 20px; border: 1px solid #ddd; background: white; font-size: 12px; cursor: pointer; }
+        .filter-btn.active { background: var(--snefc-blue); color: white; border-color: var(--snefc-blue); }
+
+        .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 1200px; }
+        th { background: #f8f9fa; padding: 12px; text-align: left; cursor: pointer; border-bottom: 2px solid #dee2e6; color: #495057; text-transform: uppercase; font-size: 11px; position: relative; }
+        td { padding: 6px 12px; border-bottom: 1px solid #eee; }
+
+        .inline-edit { width: 100%; padding: 8px; border: 1px solid transparent; border-radius: 4px; font-size: 14px; background: transparent; box-sizing: border-box; }
+        .inline-edit:hover { border-color: #ddd; background: #fff; }
+
+        .modal { display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); }
+        .modal-content { background: white; margin: 20px auto; padding: 30px; width: 90%; max-width: 850px; border-radius: 12px; max-height: 90vh; overflow-y: auto; position: relative; }
+        
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .span-2 { grid-column: span 2; }
+        .span-3 { grid-column: span 3; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-size: 11px; font-weight: bold; color: var(--snefc-blue); text-transform: uppercase; }
+        input, select, textarea { padding: 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 16px; }
+        
+        .btn { padding: 12px 20px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 13px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-blue { background: var(--snefc-blue); color: white; }
+        .btn-outline { border: 1px solid #ddd; background: white; }
+        .player-link { color: var(--snefc-blue); font-weight: bold; cursor: pointer; text-decoration: underline; }
+        .med-alert { color: var(--danger); font-weight: bold; margin-right: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="mgmt-console">
+        <div class="mgmt-group">
+            <label>Active Team Context</label>
+            <select id="activeTeamSelect" onchange="changeContext()"></select>
+        </div>
+        <div class="mgmt-group">
+            <label>Active Season</label>
+            <select id="activeSeasonSelect" onchange="changeContext()"></select>
+        </div>
+        <button class="btn btn-outline" onclick="openMgmtModal()">Manage Tryout Season</button>
+        <div style="margin-left: auto;">
+            <button class="btn btn-blue" onclick="openModal(-1)">+ On-Site Add</button>
+        </div>
+    </div>
+
+    <div class="header">
+        <h2 id="displayTitle" style="margin:0; color:var(--snefc-blue);">SNEFC Dashboard</h2>
+    </div>
+
+    <div class="controls">
+        <button class="btn btn-outline" onclick="document.getElementById('csvFile').click()">Import CSV</button>
+        <button class="btn btn-outline" onclick="exportJSON()">Backup JSON</button>
+        <button class="btn btn-outline" onclick="document.getElementById('jsonFile').click()">Restore JSON</button>
+        <input type="file" id="csvFile" hidden accept=".csv" onchange="importCSV(event)">
+        <input type="file" id="jsonFile" hidden accept=".json" onchange="importJSON(event)">
+    </div>
+
+    <div class="filter-section">
+        <div class="filter-group">
+            <span class="filter-label">Status:</span>
+            <button class="filter-btn active" id="f-stat-all" onclick="clearGroupFilters('status')">All</button>
+            <button class="filter-btn" id="f-stat-evaluated" onclick="toggleMultiFilter('status', 'Evaluated')">⚪ Evaluated</button>
+            <button class="filter-btn" id="f-stat-offered" onclick="toggleMultiFilter('status', 'Offered')">🟡 Offered</button>
+            <button class="filter-btn" id="f-stat-committed" onclick="toggleMultiFilter('status', 'Committed')">🟢 Committed</button>
+            <button class="filter-btn" id="f-stat-leaving" onclick="toggleMultiFilter('status', 'Leaving')">🟠 Leaving</button>
+            <button class="filter-btn" id="f-stat-declined" onclick="toggleMultiFilter('status', 'Declined')">❌ Declined</button>
+        </div>
+        <div class="filter-group">
+            <span class="filter-label">Rating:</span>
+            <button class="filter-btn active" id="f-rate-all" onclick="clearGroupFilters('rating')">All</button>
+            <button class="filter-btn" id="f-rate-e" onclick="toggleMultiFilter('rating', 'E')">Elite (E)</button>
+            <button class="filter-btn" id="f-rate-p" onclick="toggleMultiFilter('rating', 'P')">Premier (P)</button>
+            <button class="filter-btn" id="f-rate-c" onclick="toggleMultiFilter('rating', 'C')">Competitive (C)</button>
+        </div>
+        <div class="filter-group">
+            <span class="filter-label">New Team:</span>
+            <button class="filter-btn active" id="f-team-all" onclick="clearGroupFilters('team')">All</button>
+            <button class="filter-btn" id="f-team-ecnl" onclick="toggleMultiFilter('team', 'ECNL')">ECNL</button>
+            <button class="filter-btn" id="f-team-ecnlrl" onclick="toggleMultiFilter('team', 'ECNL-RL')">ECNL-RL</button>
+            <button class="filter-btn" id="f-team-gold" onclick="toggleMultiFilter('team', 'Gold')">Gold</button>
+        </div>
+    </div>
+
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 50px;" onclick="sortTable('number')">#</th>
+                    <th style="width: 180px;" onclick="sortTable('firstName')">Name</th>
+                    <th style="width: 150px;" onclick="sortTable('currentTeam')">Current Team</th>
+                    <th style="width: 80px;" onclick="sortTable('field')">Field</th>
+                    <th style="width: 140px;" onclick="sortTable('rating')">Rating</th>
+                    <th style="width: 120px;" onclick="sortTable('team')">New Team</th>
+                    <th style="width: 140px;" onclick="sortTable('status')">Status</th>
+                    <th style="width: 250px;">Notes</th>
+                </tr>
+            </thead>
+            <tbody id="playerTableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<div id="mgmtModal" class="modal">
+    <div class="modal-content">
+        <h3>Manage Tryout Season & Teams</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div><label>Scouting Groups</label><div id="teamMgmtList" style="border:1px solid #eee; height:150px; overflow-y:auto; margin-bottom:10px;"></div><div style="display:flex; gap:5px;"><input type="text" id="newTeamIn" style="flex:1"><button class="btn btn-blue" onclick="addTeam()">Add</button></div></div>
+            <div><label>Seasons</label><div id="seasonMgmtList" style="border:1px solid #eee; height:150px; overflow-y:auto; margin-bottom:10px;"></div><div style="display:flex; gap:5px;"><input type="text" id="newSeasonIn" style="flex:1"><button class="btn btn-blue" onclick="addSeason()">Add</button></div></div>
+        </div>
+        <button class="btn btn-outline" style="margin-top:20px;" onclick="closeMgmtModal()">Close</button>
+    </div>
+</div>
+
+<div id="playerModal" class="modal">
+    <div class="modal-content">
+        <h3 id="modalTitle">Full Player Profile</h3>
+        <div class="grid">
+            <div class="form-group"><label>First Name</label><input type="text" id="fFirst"></div>
+            <div class="form-group"><label>Last Name</label><input type="text" id="fLast"></div>
+            <div class="form-group"><label>Jersey #</label><input type="text" id="fNum"></div>
+            
+            <div class="form-group span-2"><label>Current Team (Pre-Tryout)</label><input type="text" id="fCurrentTeam"></div>
+            <div class="form-group"><label>Field / Group</label><input type="text" id="fField"></div>
+
+            <div class="form-group">
+                <label>Rating</label>
+                <select id="fRating">
+                    <option value="">--</option><option value="E">Elite (E)</option><option value="P">Premier (P)</option><option value="C">Competitive (C)</option><option value="D">Developmental (D)</option><option value="B">Bubble (B)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>New Team Assignment</label>
+                <select id="fTeamSelect">
+                    <option value="">--</option><option value="ECNL">ECNL</option><option value="ECNL-RL">ECNL-RL</option><option value="Gold">Gold</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Status</label>
+                <select id="fStatus">
+                    <option value="Evaluated">⚪ Evaluated</option><option value="Committed">🟢 Committed</option><option value="Offered">🟡 Offered</option><option value="Leaving">🟠 Leaving</option><option value="Declined">❌ Declined</option>
+                </select>
+            </div>
+
+            <div class="form-group span-2"><label>Email Address</label><input type="email" id="fEmail"></div>
+            <div class="form-group"><label>Phone Number</label><input type="tel" id="fPhone"></div>
+            <div class="form-group span-3"><label>Medical Alerts</label><input type="text" id="fMed"></div>
+            <div class="form-group span-3"><label>Notes</label><textarea id="fNotes" rows="4"></textarea></div>
+        </div>
+        <div style="margin-top:20px; display:flex; justify-content:space-between;">
+            <button class="btn btn-outline" style="color:var(--danger)" onclick="deletePlayer()">Delete</button>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-blue" onclick="savePlayer()">Save Profile</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let db = JSON.parse(localStorage.getItem('snefc_pro_v14')) || {
+    teams: [{id: 't1', name: '2013 Boys ECNL'}],
+    seasons: [{id: 's1', name: '2025/26', current: true}],
+    players: [],
+    activeTeam: 't1',
+    activeSeason: 's1'
+};
+
+const ratingMap = { 'E': 'Elite (E)', 'P': 'Premier (P)', 'C': 'Competitive (C)', 'D': 'Developmental (D)', 'B': 'Bubble (B)' };
+let activeFilters = { status: new Set(), rating: new Set(), team: new Set() };
+let currentSort = { key: '', dir: 'asc' };
+let editIdx = -1;
+
+function saveDB() { localStorage.setItem('snefc_pro_v14', JSON.stringify(db)); render(); }
+
+function render() {
+    document.getElementById('activeTeamSelect').innerHTML = db.teams.map(t => `<option value="${t.id}" ${db.activeTeam===t.id?'selected':''}>${t.name}</option>`).join('');
+    document.getElementById('activeSeasonSelect').innerHTML = db.seasons.map(s => `<option value="${s.id}" ${db.activeSeason===s.id?'selected':''}>${s.name} ${s.current?'(Current)':''}</option>`).join('');
+    document.getElementById('displayTitle').innerText = `${db.teams.find(t=>t.id===db.activeTeam)?.name} - ${db.seasons.find(s=>s.id===db.activeSeason)?.name}`;
+
+    const contextPlayers = db.players.filter(p => p.teamId === db.activeTeam && p.seasonId === db.activeSeason);
+    const visible = contextPlayers.filter(p => {
+        const sMatch = activeFilters.status.size === 0 || activeFilters.status.has(p.status || 'Evaluated');
+        const rMatch = activeFilters.rating.size === 0 || activeFilters.rating.has(p.rating);
+        const tMatch = activeFilters.team.size === 0 || activeFilters.team.has(p.team);
+        return sMatch && rMatch && tMatch;
+    });
+
+    document.getElementById('playerTableBody').innerHTML = visible.map(p => {
+        const globalIdx = db.players.indexOf(p);
+        return `
+            <tr>
+                <td><input class="inline-edit" value="${p.number || ''}" onchange="updateRow(${globalIdx}, 'number', this.value)"></td>
+                <td>${p.medical ? '<span class="med-alert">⚠️</span>':''}<span class="player-link" onclick="openModal(${globalIdx})">${p.firstName} ${p.lastName}</span></td>
+                <td><input class="inline-edit" value="${p.currentTeam || ''}" onchange="updateRow(${globalIdx}, 'currentTeam', this.value)"></td>
+                <td><input class="inline-edit" value="${p.field || ''}" onchange="updateRow(${globalIdx}, 'field', this.value)"></td>
+                <td>
+                    <select class="inline-edit" onchange="updateRow(${globalIdx}, 'rating', this.value)">
+                        <option value="">--</option>
+                        ${Object.entries(ratingMap).map(([k,v]) => `<option value="${k}" ${p.rating === k ? 'selected' : ''}>${v}</option>`).join('')}
+                    </select>
+                </td>
+                <td>
+                    <select class="inline-edit" onchange="updateRow(${globalIdx}, 'team', this.value)">
+                        <option value="">--</option><option value="ECNL" ${p.team==='ECNL'?'selected':''}>ECNL</option><option value="ECNL-RL" ${p.team==='ECNL-RL'?'selected':''}>ECNL-RL</option><option value="Gold" ${p.team==='Gold'?'selected':''}>Gold</option>
+                    </select>
+                </td>
+                <td>
+                    <select class="inline-edit" onchange="updateRow(${globalIdx}, 'status', this.value)">
+                        <option value="Evaluated" ${p.status==='Evaluated'?'selected':''}>⚪ Evaluated</option>
+                        <option value="Offered" ${p.status==='Offered'?'selected':''}>🟡 Offered</option>
+                        <option value="Committed" ${p.status==='Committed'?'selected':''}>🟢 Committed</option>
+                        <option value="Leaving" ${p.status==='Leaving'?'selected':''}>🟠 Leaving</option>
+                        <option value="Declined" ${p.status==='Declined'?'selected':''}>❌ Declined</option>
+                    </select>
+                </td>
+                <td><input class="inline-edit" value="${p.notes || ''}" onchange="updateRow(${globalIdx}, 'notes', this.value)"></td>
+            </tr>`;
+    }).join('');
+
+    document.getElementById('teamMgmtList').innerHTML = db.teams.map(t => `<div style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">${t.name} <button onclick="removeInfra('team', '${t.id}')">×</button></div>`).join('');
+    document.getElementById('seasonMgmtList').innerHTML = db.seasons.map(s => `<div style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;"><span onclick="setCurrentSeason('${s.id}')" style="cursor:pointer">${s.name} ${s.current?'⭐':''}</span> <button onclick="removeInfra('season', '${s.id}')">×</button></div>`).join('');
+}
+
+function toggleMultiFilter(group, value) {
+    const slug = group === 'status' ? 'stat' : group === 'team' ? 'team' : 'rate';
+    document.getElementById(`f-${slug}-all`).classList.remove('active');
+    if (activeFilters[group].has(value)) activeFilters[group].delete(value);
+    else activeFilters[group].add(value);
+    
+    const btnId = `f-${slug}-${value.toLowerCase().replace('-', '')}`;
+    const btn = document.getElementById(btnId);
+    if(btn) btn.classList.toggle('active');
+    if (activeFilters[group].size === 0) clearGroupFilters(group); else render();
+}
+
+function clearGroupFilters(group) {
+    activeFilters[group].clear();
+    const prefix = group === 'status' ? 'stat' : group === 'team' ? 'team' : 'rate';
+    document.querySelectorAll(`[id^="f-${prefix}-"]`).forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`f-${prefix}-all`).classList.add('active');
+    render();
+}
+
+function openModal(idx) {
+    editIdx = idx;
+    const p = idx > -1 ? db.players[idx] : {firstName:'', lastName:'', number:'', currentTeam:'', field:'', rating:'', team:'', email:'', phone:'', medical:'', notes:''};
+    document.getElementById('fFirst').value = p.firstName || '';
+    document.getElementById('fLast').value = p.lastName || '';
+    document.getElementById('fNum').value = p.number || '';
+    document.getElementById('fCurrentTeam').value = p.currentTeam || '';
+    document.getElementById('fField').value = p.field || '';
+    document.getElementById('fRating').value = p.rating || '';
+    document.getElementById('fTeamSelect').value = p.team || '';
+    document.getElementById('fEmail').value = p.email || '';
+    document.getElementById('fPhone').value = p.phone || '';
+    document.getElementById('fMed').value = p.medical || '';
+    document.getElementById('fNotes').value = p.notes || '';
+    document.getElementById('playerModal').style.display = 'block';
+}
+
+function savePlayer() {
+    const data = {
+        teamId: db.activeTeam, seasonId: db.activeSeason,
+        firstName: document.getElementById('fFirst').value, lastName: document.getElementById('fLast').value,
+        number: document.getElementById('fNum').value, currentTeam: document.getElementById('fCurrentTeam').value,
+        field: document.getElementById('fField').value, rating: document.getElementById('fRating').value,
+        team: document.getElementById('fTeamSelect').value, status: editIdx > -1 ? db.players[editIdx].status : 'Evaluated',
+        email: document.getElementById('fEmail').value, phone: document.getElementById('fPhone').value,
+        medical: document.getElementById('fMed').value, notes: document.getElementById('fNotes').value
+    };
+    if(editIdx > -1) db.players[editIdx] = data; else db.players.push(data);
+    closeModal(); saveDB();
+}
+
+function importCSV(e) {
+    const reader = new FileReader();
+    reader.onload = function() {
+        const rows = reader.result.split('\n').slice(1);
+        rows.forEach(r => {
+            const c = r.split(',');
+            if(c[3]) db.players.push({
+                teamId: db.activeTeam, seasonId: db.activeSeason,
+                number: c[0], rating: c[1], field: c[2], firstName: c[3], lastName: c[4],
+                email: c[5], phone: c[6], currentTeam: c[8], medical: c[9], notes: c[10], status: 'Evaluated'
+            });
+        });
+        saveDB();
+    };
+    reader.readAsText(e.target.files[0]);
+}
+
+function sortTable(key) {
+    if (currentSort.key === key) currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+    else { currentSort.key = key; currentSort.dir = 'asc'; }
+    db.players.sort((a, b) => {
+        let vA = (a[key] || "").toString().toLowerCase();
+        let vB = (b[key] || "").toString().toLowerCase();
+        return currentSort.dir === 'asc' ? vA.localeCompare(vB, undefined, {numeric:true}) : vB.localeCompare(vA, undefined, {numeric:true});
+    });
+    render();
+}
+
+function closeModal() { document.getElementById('playerModal').style.display = 'none'; }
+function openMgmtModal() { document.getElementById('mgmtModal').style.display = 'block'; }
+function closeMgmtModal() { document.getElementById('mgmtModal').style.display = 'none'; }
+function changeContext() { db.activeTeam = document.getElementById('activeTeamSelect').value; db.activeSeason = document.getElementById('activeSeasonSelect').value; saveDB(); }
+function addTeam() { const n = document.getElementById('newTeamIn').value; if(n) { db.teams.push({id:'t'+Date.now(), name:n}); saveDB(); document.getElementById('newTeamIn').value=''; } }
+function addSeason() { const n = document.getElementById('newSeasonIn').value; if(n) { db.seasons.forEach(s=>s.current=false); db.seasons.push({id:'s'+Date.now(), name:n, current:true}); saveDB(); document.getElementById('newSeasonIn').value=''; } }
+function setCurrentSeason(id) { db.seasons.forEach(s=>s.current=(s.id===id)); saveDB(); }
+function updateRow(idx, field, val) { db.players[idx][field] = val; localStorage.setItem('snefc_pro_v14', JSON.stringify(db)); }
+function exportJSON() { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db)); a.download = "SNEFC_Backup.json"; a.click(); }
+function importJSON(e) { const r = new FileReader(); r.onload = function() { db = JSON.parse(r.result); saveDB(); }; r.readAsText(e.target.files[0]); }
+function removeInfra(type, id) { if(confirm("Delete context?")) { if(type==='team') db.teams = db.teams.filter(t=>t.id!==id); else db.seasons = db.seasons.filter(s=>s.id!==id); saveDB(); } }
+function deletePlayer() { if(confirm("Delete player?")) { db.players.splice(editIdx, 1); closeModal(); saveDB(); } }
+
+render();
+</script>
+</body>
+</html>
