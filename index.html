@@ -2,340 +2,910 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SNEFC Pro Scout - Master Lockdown</title>
-    
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Soccer Tryouts Manager | Real-Time Updates</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <!-- Drag & Drop library: SortableJS -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <!-- SheetJS for Excel import -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        :root { --snefc-blue: #004a99; --elite-bg: #e3f2fd; --premier-bg: #e8f5e9; --bubble-bg: #fff3e0; --danger: #dc3545; --bg: #f0f4f8; }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 15px; }
+        * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
+        body { background: #f0f7ff; margin: 0; padding: 20px; }
+        .app-container { max-width: 1600px; margin: 0 auto; }
         
-        .app-container { max-width: 1400px; margin: auto; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 20px; }
+        .selection-bar { background: white; border-radius: 40px; padding: 16px 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; gap: 20px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+        .selection-group { display: flex; align-items: center; gap: 12px; background: #f1f5f9; padding: 8px 20px; border-radius: 40px; }
+        .selection-group label { font-weight: 600; font-size: 0.9rem; color: #1e3c72; }
+        .selection-group select { padding: 8px 16px; border-radius: 30px; border: 1px solid #cbd5e1; background: white; font-size: 0.9rem; cursor: pointer; min-width: 150px; }
+        .event-manager-btn { background: #2c7da0; color: white; border: none; padding: 8px 20px; border-radius: 30px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px; }
         
-        .mgmt-console { background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end; border: 1px solid #dee2e6; flex-wrap: wrap; }
-        .mgmt-group { display: flex; flex-direction: column; gap: 5px; min-width: 160px; flex: 1; }
-        .mgmt-group label { font-size: 10px; font-weight: bold; color: #495057; text-transform: uppercase; }
-
-        /* Multi-Select Filters RESTORED */
-        .filter-section { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #eee; display: flex; flex-direction: column; gap: 12px; }
-        .filter-group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .filter-label { font-size: 10px; font-weight: bold; color: #666; text-transform: uppercase; width: 85px; }
-        .filter-btn { padding: 8px 14px; border-radius: 20px; border: 1px solid #ddd; background: white; font-size: 11px; cursor: pointer; transition: 0.2s; }
-        .filter-btn.active { background: var(--snefc-blue) !important; color: white !important; font-weight: bold; border-color: var(--snefc-blue); }
-
-        /* Table Widths & Sorting Indicators */
-        .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #eee; border-radius: 8px; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 1300px; table-layout: fixed; }
-        th { background: #f8f9fa; padding: 12px; text-align: left; cursor: pointer; border-bottom: 2px solid #dee2e6; font-size: 11px; position: relative; }
-        th.sort-asc::after { content: ' ↑'; color: var(--snefc-blue); }
-        th.sort-desc::after { content: ' ↓'; color: var(--snefc-blue); }
-        td { padding: 8px 12px; border-bottom: 1px solid #eee; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-        /* FIXED LOCKDOWN WIDTHS */
-        .col-num { width: 60px; }
-        .col-name { width: 200px; }
-        .col-current { width: 160px; }
-        .col-field { width: 100px; }
-        .col-rate { width: 140px; }
-        .col-assign { width: 140px; }
-        .col-status { width: 140px; }
-        .col-notes { width: auto; }
-
-        /* Row Heatmap */
-        tr.rate-E { background-color: var(--elite-bg); }
-        tr.rate-P { background-color: var(--premier-bg); }
-        tr.rate-B { background-color: var(--bubble-bg); }
-
-        .player-link { color: var(--snefc-blue); font-weight: bold; cursor: pointer; text-decoration: underline; }
-        .inline-edit { width: 100%; border: none; background: transparent; font-family: inherit; font-size: 14px; }
+        .mode-tabs { display: flex; gap: 12px; margin-bottom: 24px; border-bottom: 2px solid #e2e8f0; }
+        .mode-tab { padding: 12px 28px; background: none; border: none; font-size: 1rem; font-weight: 600; cursor: pointer; color: #64748b; transition: 0.2s; }
+        .mode-tab.active { color: #2c7da0; border-bottom: 3px solid #2c7da0; margin-bottom: -2px; }
         
-        /* Modals */
-        .modal { display: none; position: fixed; z-index: 10000; inset: 0; background: rgba(0,0,0,0.85); overflow-y: auto; }
-        .modal-content { background: white; margin: 20px auto; padding: 30px; width: 95%; max-width: 850px; border-radius: 12px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-        .span-2 { grid-column: span 2; }
-        .span-3 { grid-column: span 3; }
+        .btn { background: #2c7da0; color: white; border: none; padding: 8px 16px; border-radius: 30px; cursor: pointer; font-weight: 500; transition: 0.2s; }
+        .btn-danger { background: #c1292e; }
+        .btn-outline { background: white; border: 1px solid #2c7da0; color: #2c7da0; }
+        .btn-sm { padding: 4px 12px; font-size: 0.8rem; }
+        .btn:hover { opacity: 0.85; transform: translateY(-1px); }
         
-        .btn { padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 13px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
-        .btn-blue { background: var(--snefc-blue); color: white; }
-        .btn-outline { border: 1px solid #ddd; background: white; }
-        .icon-btn { background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; padding: 5px 10px; font-size: 14px; }
-        .icon-btn.recording { background: var(--danger); color: white; animation: pulse 1s infinite; }
+        .filter-bar { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0 16px; background: white; padding: 12px 20px; border-radius: 40px; align-items: center; }
+        .filter-group { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; background: #f1f5f9; padding: 6px 12px; border-radius: 40px; }
+        .filter-group-title { font-weight: 600; font-size: 0.8rem; margin-right: 4px; }
+        .filter-btn { background: transparent; border: none; padding: 6px 14px; border-radius: 40px; cursor: pointer; font-size: 0.8rem; font-weight: 500; transition: 0.1s; }
+        .filter-btn:hover { background: #e2e8f0; }
+        .filter-btn.active-filter { background: #1e3c72; color: white; }
+        
+        .player-link { color: #0f4c5c; text-decoration: underline; cursor: pointer; font-weight: 600; }
+        .player-link:hover { color: #2c7da0; }
+        
+        input, select, textarea { padding: 6px 8px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 0.8rem; }
+        
+        /* Table View Modes */
+        .tryout-table-wrapper { overflow-x: auto; background: white; border-radius: 24px; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        
+        /* Comfort View (default) */
+        .view-comfort th, .view-comfort td { padding: 12px 8px; }
+        .view-comfort .filter-bar { margin: 20px 0 16px; }
+        
+        /* Compact View */
+        .view-compact th, .view-compact td { padding: 4px 6px; }
+        .view-compact .filter-bar { margin: 10px 0 8px; padding: 8px 16px; }
+        .view-compact .mode-tabs { margin-bottom: 16px; }
+        .view-compact .mode-tab { padding: 8px 20px; }
+        .view-compact .selection-bar { padding: 12px 20px; margin-bottom: 16px; }
+        .view-compact input, .view-compact select, .view-compact textarea { padding: 4px 6px; font-size: 0.75rem; }
+        .view-compact .player-link { font-size: 0.8rem; }
+        .view-compact .status-icon { padding: 2px 6px; font-size: 0.7rem; }
+        
+        th { background: #f8fafc; cursor: pointer; user-select: none; position: sticky; top: 0; white-space: nowrap; }
+        th:hover { background: #e2e8f0; }
+        .sort-indicator { margin-left: 5px; font-size: 0.7rem; display: inline-block; }
+        
+        .view-toggle { display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 4px 12px; border-radius: 40px; }
+        .view-toggle label { font-size: 0.8rem; font-weight: 500; color: #334155; cursor: pointer; }
+        .view-toggle input { margin: 0; cursor: pointer; width: 36px; height: 20px; }
+        
+        .roster-grid { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 30px; }
+        .team-col { flex: 1; min-width: 260px; background: #fefcf5; border-radius: 28px; padding: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); border-top: 8px solid; }
+        .team-col h3 { margin-top: 0; display: flex; justify-content: space-between; align-items: center; font-size: 1.1rem; }
+        .roster-dropzone { min-height: 200px; max-height: 500px; overflow-y: auto; }
+        
+        .player-card { background: white; margin: 8px 0; padding: 10px 12px; border-radius: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: grab; transition: 0.1s; border-left: 5px solid; display: flex; justify-content: space-between; align-items: center; }
+        .player-card:active { cursor: grabbing; }
+        .player-info { font-weight: 500; font-size: 0.85rem; } 
+        .player-pos { font-size: 0.7rem; color: gray; }
+        .roster-empty { color: #aaa; text-align: center; padding: 20px; font-style: italic; }
+        
+        .unassigned-pool { background: white; border-radius: 28px; padding: 20px; margin-top: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .unassigned-pool h3 { margin-top: 0; color: #1e3c72; display: flex; align-items: center; gap: 10px; }
+        .unassigned-filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .unassigned-dropzone { min-height: 300px; max-height: 400px; overflow-y: auto; background: #f8fafc; border-radius: 20px; padding: 12px; border: 2px dashed #cbd5e1; }
+        .unassigned-player-card { background: white; margin: 8px 0; padding: 10px 12px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: grab; transition: 0.1s; border-left: 5px solid; display: flex; justify-content: space-between; align-items: center; }
+        .unassigned-player-card:active { cursor: grabbing; }
+        .unassigned-player-info { flex: 1; }
+        .unassigned-player-name { font-weight: 600; font-size: 0.85rem; }
+        .unassigned-player-details { font-size: 0.7rem; color: #64748b; margin-top: 4px; display: flex; flex-wrap: wrap; gap: 8px; }
+        .rating-dot { display: inline-block; width: 10px; height: 10px; border-radius: 10px; margin-right: 4px; }
+        
+        .team-ecnl { border-top-color: #2c7da0; }
+        .team-ecnl-rl { border-top-color: #2a9d8f; }
+        .team-gold { border-top-color: #e9c46a; }
+        .team-not-offering { border-top-color: #9e2a2b; }
+        
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-card { background: white; max-width: 700px; width: 90%; border-radius: 32px; padding: 28px; max-height: 85vh; overflow-y: auto; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 6px; color: #334155; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border-radius: 12px; border: 1px solid #cbd5e1; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+        
+        .storage-badge { background: #fef3c7; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; }
+        .debug-toast { position: fixed; bottom: 20px; right: 20px; background: #333; color: white; padding: 8px 16px; border-radius: 8px; font-size: 12px; z-index: 9999; }
     </style>
 </head>
 <body>
-
 <div class="app-container">
-    <div class="mgmt-console">
-        <div class="mgmt-group"><label>Active Team</label><select id="activeTeamSelect" onchange="updateLocalContext('team', this.value)"></select></div>
-        <div class="mgmt-group"><label>Active Season</label><select id="activeSeasonSelect" onchange="updateLocalContext('season', this.value)"></select></div>
-        <button class="btn btn-outline" onclick="toggleModal('mgmtModal', true)">Manage Infrastructure</button>
-        <button class="btn btn-blue" style="margin-left:auto" onclick="openPlayerModal('')">+ On-Site Add</button>
+    <div class="selection-bar">
+        <div class="selection-group">
+            <label><i class="fas fa-calendar-alt"></i> Tryout Event:</label>
+            <select id="eventSelect"></select>
+        </div>
+        <div class="selection-group">
+            <label><i class="fas fa-users"></i> Age Group:</label>
+            <select id="ageGroupSelect"></select>
+        </div>
+        <button id="openEventManagerBtn" class="event-manager-btn"><i class="fas fa-cog"></i> Event Manager</button>
+        <div class="view-toggle">
+            <label><i class="fas fa-compress"></i> Compact</label>
+            <input type="checkbox" id="compactViewToggle">
+            <label><i class="fas fa-expand"></i> Comfort</label>
+        </div>
+        <span id="storageBadge" class="storage-badge"><i class="fas fa-database"></i> Loading...</span>
+    </div>
+    
+    <div class="mode-tabs">
+        <button class="mode-tab" data-mode="tryout">📋 Tryout List</button>
+        <button class="mode-tab" data-mode="roster">🏗️ Roster Builder</button>
     </div>
 
-    <div class="filter-section">
-        <div class="filter-group">
-            <span class="filter-label">Status:</span>
-            <button class="filter-btn active" data-filter="status" data-val="all">All</button>
-            <button class="filter-btn" data-filter="status" data-val="Evaluated">⚪ Evaluated</button>
-            <button class="filter-btn" data-filter="status" data-val="Offered">🟡 Offered</button>
-            <button class="filter-btn" data-filter="status" data-val="Committed">🟢 Committed</button>
-            <button class="filter-btn" data-filter="status" data-val="Declined">❌ Declined</button>
-        </div>
-        <div class="filter-group">
-            <span class="filter-label">Rating:</span>
-            <button class="filter-btn active" data-filter="rating" data-val="all">All</button>
-            <button class="filter-btn" data-filter="rating" data-val="E">Elite (E)</button>
-            <button class="filter-btn" data-filter="rating" data-val="P">Premier (P)</button>
-            <button class="filter-btn" data-filter="rating" data-val="C">Competitive (C)</button>
-            <button class="filter-btn" data-filter="rating" data-val="B">Bubble (B)</button>
-        </div>
-        <div class="filter-group">
-            <span class="filter-label">Assign Team:</span>
-            <button class="filter-btn active" data-filter="team" data-val="all">All</button>
-            <button class="filter-btn" data-filter="team" data-val="ECNL">ECNL</button>
-            <button class="filter-btn" data-filter="team" data-val="ECNL-RL">ECNL-RL</button>
-            <button class="filter-btn" data-filter="team" data-val="Gold">Gold</button>
-        </div>
-    </div>
-
-    <div class="table-wrapper">
-        <table>
-            <thead>
-                <tr>
-                    <th class="col-num" id="th-number" onclick="handleSort('number')">#</th>
-                    <th class="col-name" id="th-firstName" onclick="handleSort('firstName')">Name</th>
-                    <th class="col-current" id="th-currentTeam" onclick="handleSort('currentTeam')">Current Team</th>
-                    <th class="col-field" id="th-field" onclick="handleSort('field')">Field</th>
-                    <th class="col-rate" id="th-rating" onclick="handleSort('rating')">Rating</th>
-                    <th class="col-assign" id="th-team" onclick="handleSort('team')">Assign Team</th>
-                    <th class="col-status" id="th-status" onclick="handleSort('status')">Status</th>
-                    <th class="col-notes">Notes</th>
-                </tr>
-            </thead>
-            <tbody id="playerTableBody"></tbody>
-        </table>
-    </div>
-</div>
-
-<div id="playerModal" class="modal">
-    <div class="modal-content">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-            <h3 id="modalTitle" style="margin:0">Player Evaluation Profile</h3>
-            <div style="display:flex; gap:8px;">
-                <button class="icon-btn" onclick="sendMail(1)">📧 Gratitude</button>
-                <button class="icon-btn" onclick="sendMail(2)">📧 Offer</button>
-                <button class="icon-btn" onclick="sendMail(3)">📧 Custom</button>
+    <div id="tryoutView">
+        <div class="filter-bar">
+            <div class="filter-group"><span class="filter-group-title">Status:</span>
+                <button class="filter-btn" data-filter-type="status" data-val="Evaluate">🔍 Evaluate</button>
+                <button class="filter-btn" data-filter-type="status" data-val="Offered">📋 Offered</button>
+                <button class="filter-btn" data-filter-type="status" data-val="Committed">✅ Committed</button>
+                <button class="filter-btn" data-filter-type="status" data-val="Declined">❌ Declined</button>
+                <button class="filter-btn" data-filter-type="status" data-val="Not Offering">🚫 Not Offering</button>
             </div>
+            <div class="filter-group"><span class="filter-group-title">Rating:</span>
+                <button class="filter-btn" data-filter-type="rating" data-val="Elite">⭐ Elite</button>
+                <button class="filter-btn" data-filter-type="rating" data-val="Premier">🏅 Premier</button>
+                <button class="filter-btn" data-filter-type="rating" data-val="Competitive">⚡ Competitive</button>
+                <button class="filter-btn" data-filter-type="rating" data-val="Recreational">🌿 Recreational</button>
+            </div>
+            <div class="filter-group"><span class="filter-group-title">Team:</span>
+                <button class="filter-btn" data-filter-type="team" data-val="ECNL">ECNL</button>
+                <button class="filter-btn" data-filter-type="team" data-val="ECNL-RL">ECNL-RL</button>
+                <button class="filter-btn" data-filter-type="team" data-val="Gold">Gold</button>
+                <button class="filter-btn" data-filter-type="team" data-val="Not Offering">Not Offering</button>
+            </div>
+            <div><button id="importSpreadsheetBtn" class="btn"><i class="fas fa-upload"></i> Import</button>
+            <button id="addWalkupBtn" class="btn btn-outline"><i class="fas fa-user-plus"></i> Walk-up</button>
+            <button id="clearFiltersBtn" class="btn btn-outline btn-sm"><i class="fas fa-eraser"></i> Clear</button>
+            <button id="forceRefreshBtn" class="btn btn-outline btn-sm"><i class="fas fa-sync-alt"></i> Refresh</button></div>
         </div>
-        <div class="grid">
-            <div class="mgmt-group"><label>First Name</label><input type="text" id="fFirst"></div>
-            <div class="mgmt-group"><label>Last Name</label><input type="text" id="fLast"></div>
-            <div class="mgmt-group"><label>Jersey #</label><input type="text" id="fNum"></div>
-            <div class="mgmt-group span-2"><label>Current Club</label><input type="text" id="fCurrentTeam"></div>
-            <div class="mgmt-group"><label>Field/Group</label><input type="text" id="fField"></div>
-            <div class="mgmt-group"><label>Rating</label><select id="fRating"><option value="">--</option><option value="E">Elite (E)</option><option value="P">Premier (P)</option><option value="C">Competitive (C)</option><option value="D">Developmental (D)</option><option value="B">Bubble (B)</option></select></div>
-            <div class="mgmt-group"><label>Assign Team</label><select id="fTeamSelect"><option value="">--</option><option value="ECNL">ECNL</option><option value="ECNL-RL">ECNL-RL</option><option value="Gold">Gold</option></select></div>
-            <div class="mgmt-group"><label>Status</label><select id="fStatus"><option value="Evaluated">⚪ Evaluated</option><option value="Offered">🟡 Offered</option><option value="Committed">🟢 Committed</option><option value="Declined">❌ Declined</option></select></div>
-            <div class="mgmt-group span-2"><label>Email</label><input type="email" id="fEmail"></div>
-            <div class="mgmt-group"><label>Phone</label><input type="tel" id="fPhone"></div>
-            <div class="mgmt-group span-3"><label style="color:var(--danger)">Medical Alerts</label><input type="text" id="fMed"></div>
-            <div class="mgmt-group span-3"><label style="display:flex; justify-content:space-between;">Notes <button class="icon-btn" id="voiceToggle">🎙️ Dictate</button></label><textarea id="fNotes" rows="5"></textarea></div>
-        </div>
-        <div style="margin-top:20px; display:flex; justify-content:space-between;">
-            <button class="btn btn-outline" style="color:var(--danger)" onclick="deletePlayer()">Delete</button>
-            <div style="display:flex; gap:10px;"><button class="btn btn-outline" onclick="toggleModal('playerModal', false)">Cancel</button><button class="btn btn-blue" onclick="savePlayer()">Save Profile</button></div>
+        <div class="tryout-table-wrapper">
+            <table id="tryoutTable">
+                <thead>
+                    <tr>
+                        <th data-sort="jersey">Jersey <span class="sort-indicator"></span></th>
+                        <th data-sort="field">Field <span class="sort-indicator"></span></th>
+                        <th data-sort="firstName">First <span class="sort-indicator"></span></th>
+                        <th data-sort="lastName">Last <span class="sort-indicator"></span></th>
+                        <th data-sort="club">Club History <span class="sort-indicator"></span></th>
+                        <th data-sort="rating">Rating <span class="sort-indicator"></span></th>
+                        <th data-sort="assignedTeam">Team <span class="sort-indicator"></span></th>
+                        <th data-sort="status">Status <span class="sort-indicator"></span></th>
+                        <th data-sort="notes">Notes <span class="sort-indicator"></span></th>
+                    </tr>
+                </thead>
+                <tbody id="tryoutTbody"></tbody>
+            </table>
         </div>
     </div>
-</div>
 
-<div id="mgmtModal" class="modal">
-    <div class="modal-content">
-        <h3>Manage Infrastructure</h3>
-        <div class="grid">
-            <div class="mgmt-group"><label>Teams</label><div id="teamList" style="border:1px solid #ccc; height:150px; overflow-y:auto; background:#fff;"></div><div style="display:flex; gap:5px; margin-top:5px;"><input type="text" id="newTeamIn"><button class="btn btn-blue" onclick="addInfra('teams', 'newTeamIn')">Add</button></div></div>
-            <div class="mgmt-group"><label>Seasons</label><div id="seasonList" style="border:1px solid #ccc; height:150px; overflow-y:auto; background:#fff;"></div><div style="display:flex; gap:5px; margin-top:5px;"><input type="text" id="newSeasonIn"><button class="btn btn-blue" onclick="addInfra('seasons', 'newSeasonIn')">Add</button></div></div>
+    <div id="rosterView" style="display:none;">
+        <div class="roster-grid" id="rosterGrid"></div>
+        
+        <div class="unassigned-pool">
+            <h3><i class="fas fa-users"></i> Unassigned Players Pool</h3>
+            <div class="unassigned-filters">
+                <div class="filter-group">
+                    <span class="filter-group-title">Filter by:</span>
+                    <select id="unassignedRatingFilter" style="padding: 6px 12px;">
+                        <option value="all">All Ratings</option>
+                        <option value="Elite">⭐ Elite</option>
+                        <option value="Premier">🏅 Premier</option>
+                        <option value="Competitive">⚡ Competitive</option>
+                        <option value="Recreational">🌿 Recreational</option>
+                    </select>
+                    <select id="unassignedStatusFilter" style="padding: 6px 12px;">
+                        <option value="all">All Status</option>
+                        <option value="Evaluate">🔍 Evaluate</option>
+                        <option value="Offered">📋 Offered</option>
+                        <option value="Committed">✅ Committed</option>
+                        <option value="Declined">❌ Declined</option>
+                        <option value="Not Offering">🚫 Not Offering</option>
+                    </select>
+                    <input type="text" id="unassignedSearchFilter" placeholder="Search name..." style="padding: 6px 12px; width: 200px;">
+                </div>
+            </div>
+            <div id="unassignedDropzone" class="unassigned-dropzone"></div>
         </div>
-        <button class="btn btn-outline" style="margin-top:20px;" onclick="toggleModal('mgmtModal', false)">Close</button>
     </div>
 </div>
 
 <script>
-// --- YOUR CONFIG HERE ---
-const firebaseConfig = {
-  apiKey: "AIzaSyBQz_2K0tNUfH5-CAxeuxGHiOPI6MEM95k",
-  authDomain: "snefc-scout.firebaseapp.com",
-  projectId: "snefc-scout",
-  storageBucket: "snefc-scout.firebasestorage.app",
-  messagingSenderId: "378551140348",
-  appId: "1:378551140348:web:b84305dede4bd1a028bc79",
-  measurementId: "G-PGQP39G25G"
-};
-firebase.initializeApp(firebaseConfig);
-const rtdb = firebase.database();
-
-let globalData = { players: {}, teams: {}, seasons: {} };
-let localView = { 
-    team: localStorage.getItem('snefc_t') || '', season: localStorage.getItem('snefc_s') || '',
-    sort: { key: 'firstName', dir: 'asc' },
-    filters: { status: new Set(), rating: new Set(), team: new Set() }
-};
-let editPlayerId = '';
-const ratingMap = { 'E': 'Elite (E)', 'P': 'Premier (P)', 'C': 'Competitive (C)', 'D': 'Developmental (D)', 'B': 'Bubble (B)' };
-
-rtdb.ref('/').on('value', (snap) => {
-    globalData = snap.val() || { players:{}, teams:{}, seasons:{} };
-    if(!localView.team && globalData.teams) localView.team = Object.keys(globalData.teams)[0];
-    if(!localView.season && globalData.seasons) localView.season = Object.keys(globalData.seasons)[0];
-    render();
-});
-
-// --- UPDATED RENDER FUNCTION ---
-// Swap this block in your script to enable direct table editing
-function render() {
-    // 1. Sync Context Dropdowns
-    document.getElementById('activeTeamSelect').innerHTML = Object.entries(globalData.teams || {}).map(([id, t]) => 
-        `<option value="${id}" ${localView.team===id?'selected':''}>${t.name}</option>`).join('');
-    document.getElementById('activeSeasonSelect').innerHTML = Object.entries(globalData.seasons || {}).map(([id, s]) => 
-        `<option value="${id}" ${localView.season===id?'selected':''}>${s.name}</option>`).join('');
-
-    // 2. Filter & Sort Logic
-    let players = Object.entries(globalData.players || {}).map(([id, p]) => ({ id, ...p }))
-        .filter(p => p.contextTeamId === localView.team && p.contextSeasonId === localView.season);
-
-    const visible = players.filter(p => {
-        const sMatch = localView.filters.status.size === 0 || localView.filters.status.has(p.status || 'Evaluated');
-        const rMatch = localView.filters.rating.size === 0 || localView.filters.rating.has(p.rating);
-        const tMatch = localView.filters.team.size === 0 || localView.filters.team.has(p.team);
-        return sMatch && rMatch && tMatch;
-    });
-
-    visible.sort((a, b) => {
-        let vA = (a[localView.sort.key] || "").toString().toLowerCase();
-        let vB = (b[localView.sort.key] || "").toString().toLowerCase();
-        if (localView.sort.key === 'number') { vA = parseInt(vA) || 0; vB = parseInt(vB) || 0; }
-        return localView.sort.dir === 'asc' ? (vA > vB ? 1 : -1) : (vA < vB ? 1 : -1);
-    });
-
-    // 3. Table Render with COMBO BOXES
-    document.getElementById('playerTableBody').innerHTML = visible.map(p => `
-        <tr class="rate-${p.rating}">
-            <td class="col-num"><input class="inline-edit" value="${p.number || ''}" onchange="patch('${p.id}', 'number', this.value)"></td>
-            <td class="col-name"><span class="player-link" onclick="openPlayerModal('${p.id}')">${p.firstName} ${p.lastName}</span></td>
-            <td class="col-current"><input class="inline-edit" value="${p.currentTeam || ''}" onchange="patch('${p.id}', 'currentTeam', this.value)"></td>
-            <td class="col-field"><input class="inline-edit" value="${p.field || ''}" onchange="patch('${p.id}', 'field', this.value)"></td>
-            
-            <td class="col-rate">
-                <select class="inline-edit" onchange="patch('${p.id}', 'rating', this.value)">
-                    <option value="">--</option>
-                    <option value="E" ${p.rating==='E'?'selected':''}>Elite (E)</option>
-                    <option value="P" ${p.rating==='P'?'selected':''}>Premier (P)</option>
-                    <option value="C" ${p.rating==='C'?'selected':''}>Competitive (C)</option>
-                    <option value="B" ${p.rating==='B'?'selected':''}>Bubble (B)</option>
-                </select>
-            </td>
-            
-            <td class="col-assign">
-                <select class="inline-edit" onchange="patch('${p.id}', 'team', this.value)">
-                    <option value="">--</option>
-                    <option value="ECNL" ${p.team==='ECNL'?'selected':''}>ECNL</option>
-                    <option value="ECNL-RL" ${p.team==='ECNL-RL'?'selected':''}>ECNL-RL</option>
-                    <option value="Gold" ${p.team==='Gold'?'selected':''}>Gold</option>
-                </select>
-            </td>
-            
-            <td class="col-status">
-                <select class="inline-edit" onchange="patch('${p.id}', 'status', this.value)">
-                    <option value="Evaluated" ${p.status==='Evaluated'?'selected':''}>⚪ Evaluated</option>
-                    <option value="Offered" ${p.status==='Offered'?'selected':''}>🟡 Offered</option>
-                    <option value="Committed" ${p.status==='Committed'?'selected':''}>🟢 Committed</option>
-                    <option value="Declined" ${p.status==='Declined'?'selected':''}>❌ Declined</option>
-                </select>
-            </td>
-            
-            <td class="col-notes"><input class="inline-edit" value="${p.notes || ''}" onchange="patch('${p.id}', 'notes', this.value)"></td>
-        </tr>`).join('');
+    const firebaseConfig = {
+	apiKey: "AIzaSyBQz_2K0tNUfH5-CAxeuxGHiOPI6MEM95k",
+	authDomain: "snefc-scout.firebaseapp.com",
+	projectId: "snefc-scout",
+	storageBucket: "snefc-scout.firebasestorage.app",
+	messagingSenderId: "378551140348",
+	appId: "1:378551140348:web:b84305dede4bd1a028bc79",
+	measurementId: "G-PGQP39G25G"
+	};
+    
+    let useFirebase = false, db = null;
+    let currentEventId = null, currentAgeGroup = null;
+    let currentMode = "tryout";
+    let currentFilters = { status: [], rating: [], team: [] };
+    let sortColumn = "firstName", sortAsc = true;
+    let allPlayers = [];
+    let currentAgeGroups = [];
+    let sortableInstances = [];
+    let unassignedSortable = null;
+    let isCompactView = false;
+    
+    const TEAM_OPTIONS = ["ECNL", "ECNL-RL", "Gold", "Not Offering"];
+    const RATING_OPTIONS = ["Elite", "Premier", "Competitive", "Recreational"];
+    const STATUS_OPTIONS = ["Evaluate", "Offered", "Committed", "Declined", "Not Offering"];
+    
+    function applyViewMode() {
+        const container = document.querySelector('.app-container');
+        if (isCompactView) {
+            container.classList.add('view-compact');
+            container.classList.remove('view-comfort');
+        } else {
+            container.classList.add('view-comfort');
+            container.classList.remove('view-compact');
+        }
+    }
+    
+    function toggleCompactView() {
+        isCompactView = document.getElementById('compactViewToggle').checked;
+        applyViewMode();
+        renderTryoutTable();
+    }
+    
+    function showDebug(message) {
+        console.log("[DEBUG]", message);
+        let toast = document.createElement('div');
+        toast.className = 'debug-toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 1500);
+    }
+    
+    function getRatingIcon(rating) {
+        const icons = { Elite: '⭐', Premier: '🏅', Competitive: '⚡', Recreational: '🌿' };
+        return icons[rating] || '';
+    }
+    
+    function getRatingColor(rating) {
+        const colors = { Elite: '#d4af37', Premier: '#a0c4ff', Competitive: '#9bf6b4', Recreational: '#bdb2ff' };
+        return colors[rating] || '#ddd';
+    }
+    
+    function getStatusIcon(status) {
+        const icons = { Evaluate: '🔍', Offered: '📋', Committed: '✅', Declined: '❌', 'Not Offering': '🚫' };
+        return icons[status] || '';
+    }
+    
+    async function getData(path) {
+        if (useFirebase) { const s = await db.ref(path).once('value'); return s.val(); }
+        else return JSON.parse(localStorage.getItem(path) || 'null');
+    }
+    async function setData(path, value) {
+        if (useFirebase) await db.ref(path).set(value);
+        else localStorage.setItem(path, JSON.stringify(value));
+    }
+    async function deleteChild(parentPath, childId) {
+        if (useFirebase) await db.ref(`${parentPath}/${childId}`).set(null);
+        else { const e = JSON.parse(localStorage.getItem(parentPath) || '{}'); delete e[childId]; localStorage.setItem(parentPath, JSON.stringify(e)); }
+    }
+    
+    try {
+        if (firebaseConfig.databaseURL && !firebaseConfig.databaseURL.includes("your-project")) {
+            firebase.initializeApp(firebaseConfig); db = firebase.database(); useFirebase = true;
+            document.getElementById('storageBadge').innerHTML = '<i class="fas fa-cloud"></i> Cloud Sync';
+            document.getElementById('storageBadge').style.background = '#dcfce7';
+        } else throw new Error();
+    } catch(e) {
+        document.getElementById('storageBadge').innerHTML = '<i class="fas fa-database"></i> Local Storage';
+        document.getElementById('storageBadge').style.background = '#fed7aa';
+    }
+    
+    function escapeHtml(str) { if (!str) return ''; return String(str).replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m])); }
+    
+    function showModal(title, html, onConfirm) {
+        let d = document.createElement('div'); d.className = 'modal';
+        d.innerHTML = `<div class="modal-card"><h2>${title}</h2>${html}<div class="modal-actions"><button id="modalCancelBtn" class="btn btn-outline">Cancel</button><button id="modalConfirmBtn" class="btn">Confirm</button></div></div>`;
+        document.body.appendChild(d);
+        d.querySelector('#modalCancelBtn').onclick = () => d.remove();
+        d.querySelector('#modalConfirmBtn').onclick = () => { onConfirm(d); d.remove(); };
+        return d;
+    }
+    
+    function openEventManager() {
+        let html = `<div style="margin-bottom: 20px;"><h3>Events</h3><div id="eventListContainer" style="max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 16px; margin-bottom: 16px;"></div>
+            <div style="display: flex; gap: 8px;"><button id="newEventManagerBtn" class="btn btn-sm" style="flex:1;">+ New</button><button id="editEventManagerBtn" class="btn btn-outline btn-sm" style="flex:1;">Edit</button><button id="deleteEventManagerBtn" class="btn btn-danger btn-sm" style="flex:1;">Delete</button></div></div>
+            <div><h3>Age Groups</h3><div id="ageGroupManagerContainer" style="margin-bottom: 12px;"></div><div style="display: flex; gap: 8px;"><input type="text" id="newAgeGroupName" placeholder="New age group" style="flex:2;"><button id="addAgeGroupManagerBtn" class="btn btn-sm" style="flex:1;">Add</button></div></div>`;
+        let modal = showModal("Event Manager", html, () => {});
         
-    updateSortUI();
-}
-
-// LOGIC
-function patch(id, f, v) { rtdb.ref(`players/${id}/${f}`).set(v); }
-function patchInfra(p, id, v) { rtdb.ref(`${p}/${id}/name`).set(v); }
-function delInfra(p, id) { if(confirm("Delete context?")) rtdb.ref(`${p}/${id}`).remove(); }
-function handleSort(k) { if(localView.sort.key === k) localView.sort.dir = localView.sort.dir==='asc'?'desc':'asc'; else { localView.sort.key=k; localView.sort.dir='asc'; } render(); }
-function updateSortUI() { document.querySelectorAll('th').forEach(th => th.classList.remove('sort-asc', 'sort-desc')); const h = document.getElementById('th-'+localView.sort.key); if(h) h.classList.add(localView.sort.dir==='asc'?'sort-asc':'sort-desc'); }
-function updateLocalContext(k, v) { localView[k] = v; localStorage.setItem('snefc_'+(k==='team'?'t':'s'), v); render(); }
-function toggleModal(m, s) { document.getElementById(m).style.display = s ? 'block' : 'none'; }
-function deletePlayer() { if(confirm("Delete player?")) { rtdb.ref('players/'+editPlayerId).remove(); toggleModal('playerModal', false); } }
-
-// Filter Listeners
-document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.onclick = () => {
-        const g = btn.dataset.filter, v = btn.dataset.val;
-        if(v === 'all') localView.filters[g].clear();
-        else { if(localView.filters[g].has(v)) localView.filters[g].delete(v); else localView.filters[g].add(v); }
-        document.querySelectorAll(`.filter-btn[data-filter="${g}"]`).forEach(b => {
-            const bv = b.dataset.val;
-            if(bv === 'all') b.classList.toggle('active', localView.filters[g].size===0);
-            else b.classList.toggle('active', localView.filters[g].has(bv));
+        function refreshEventList() {
+            getData('tryoutEvents').then(events => {
+                events = events || {};
+                const container = document.getElementById('eventListContainer');
+                container.innerHTML = '';
+                for (let id in events) {
+                    let div = document.createElement('div');
+                    div.style.cssText = 'padding: 10px; border-bottom: 1px solid #e2e8f0; cursor: pointer; display: flex; justify-content: space-between; align-items: center;';
+                    if (currentEventId === id) div.style.background = '#e0f2fe';
+                    div.innerHTML = `<span><strong>${escapeHtml(events[id].name)}</strong><br><small>${(events[id].ageGroups || []).join(', ')}</small></span>
+                                    <button class="select-event-btn" data-id="${id}" style="background:#2c7da0; color:white; border:none; padding:4px 12px; border-radius:20px;">Select</button>`;
+                    container.appendChild(div);
+                }
+                document.querySelectorAll('.select-event-btn').forEach(btn => btn.onclick = () => { currentEventId = btn.dataset.id; refreshEventList(); refreshAgeGroupManager(); });
+            });
+        }
+        
+        function refreshAgeGroupManager() {
+            if (!currentEventId) { document.getElementById('ageGroupManagerContainer').innerHTML = '<p style="color:gray;">Select an event first</p>'; return; }
+            getData('tryoutEvents').then(events => {
+                let ageGroups = events[currentEventId]?.ageGroups || [];
+                document.getElementById('ageGroupManagerContainer').innerHTML = '<div class="age-group-list">' + ageGroups.map(ag => `<div style="background:#e2e8f0; padding:6px 12px; border-radius:30px; display:inline-flex; margin:4px;">${escapeHtml(ag)} <button class="remove-ag-btn" data-ag="${escapeHtml(ag)}" style="background:none; border:none; color:#c1292e; cursor:pointer;">✖</button></div>`).join('') + '</div>';
+                document.querySelectorAll('.remove-ag-btn').forEach(btn => btn.onclick = async () => {
+                    let ag = btn.dataset.ag;
+                    let events = await getData('tryoutEvents') || {};
+                    if (events[currentEventId]) {
+                        events[currentEventId].ageGroups = (events[currentEventId].ageGroups || []).filter(a => a !== ag);
+                        await setData('tryoutEvents', events);
+                        refreshAgeGroupManager();
+                        loadEvents();
+                    }
+                });
+            });
+        }
+        
+        document.getElementById('newEventManagerBtn').onclick = () => { let name = prompt("Event name:"); if(name){ getData('tryoutEvents').then(async(events)=>{ events[Date.now()]={name,ageGroups:[]}; await setData('tryoutEvents',events); refreshEventList(); }); } };
+        document.getElementById('editEventManagerBtn').onclick = () => { if(!currentEventId) return alert("Select event"); let name=prompt("New name:"); if(name){ getData('tryoutEvents').then(async(events)=>{ events[currentEventId].name=name; await setData('tryoutEvents',events); refreshEventList(); loadEvents(); }); } };
+        document.getElementById('deleteEventManagerBtn').onclick = () => { if(!currentEventId) return; if(confirm("Delete event?")){ deleteChild('players',`players_${currentEventId}`); getData('tryoutEvents').then(async(events)=>{ delete events[currentEventId]; await setData('tryoutEvents',events); currentEventId=null; refreshEventList(); loadEvents(); }); } };
+        document.getElementById('addAgeGroupManagerBtn').onclick = async () => { if(!currentEventId) return alert("Select event"); let newAg=document.getElementById('newAgeGroupName').value.trim(); if(!newAg) return; let events=await getData('tryoutEvents')||{}; if(events[currentEventId] && !events[currentEventId].ageGroups.includes(newAg)){ events[currentEventId].ageGroups.push(newAg); await setData('tryoutEvents',events); refreshAgeGroupManager(); loadEvents(); document.getElementById('newAgeGroupName').value=''; } };
+        refreshEventList();
+        refreshAgeGroupManager();
+    }
+    
+    async function updateAndRefresh(playerId, field, value) {
+        showDebug(`Updating ${field} to "${value}"`);
+        if (!currentEventId) return;
+        
+        const players = await getData(`players_${currentEventId}`) || {};
+        if (players[playerId]) {
+            players[playerId][field] = value;
+            await setData(`players_${currentEventId}`, players);
+        } else {
+            return;
+        }
+        
+        const freshData = await getData(`players_${currentEventId}`) || {};
+        const filteredPlayers = Object.values(freshData).filter(p => p.ageGroup === currentAgeGroup);
+        allPlayers = filteredPlayers.map(p => ({...p, jersey: p.jersey||'', field: p.field||'', rating: p.rating||''}));
+        
+        if (currentMode === "tryout") {
+            renderTryoutTable();
+        } else {
+            renderRosterBuilder();
+        }
+    }
+    
+    function handleFieldChange(event) {
+        const target = event.target;
+        const playerId = target.getAttribute('data-id');
+        const field = target.getAttribute('data-field');
+        let value = target.value;
+        
+        if (value === 'Select Rating' || value === '') {
+            value = '';
+        }
+        
+        if (playerId && field) {
+            updateAndRefresh(playerId, field, value);
+        }
+    }
+    
+    async function forceRefresh() {
+        showDebug("Force refreshing data...");
+        if (!currentEventId || !currentAgeGroup) {
+            showDebug("No event or age group selected");
+            return;
+        }
+        const freshData = await getData(`players_${currentEventId}`) || {};
+        const filteredPlayers = Object.values(freshData).filter(p => p.ageGroup === currentAgeGroup);
+        allPlayers = filteredPlayers.map(p => ({...p, jersey: p.jersey||'', field: p.field||'', rating: p.rating||''}));
+        renderTryoutTable();
+    }
+    
+    async function addWalkup() {
+        if (!currentEventId) return alert("Select an event first");
+        if (!currentAgeGroup) return alert("Select an age group first");
+        let html = `<div class="form-row"><div class="form-group"><label>First Name *</label><input id="fn"></div><div class="form-group"><label>Last Name *</label><input id="ln"></div></div>
+            <div class="form-row"><div class="form-group"><label>DOB</label><input id="dob"></div><div class="form-group"><label>Phone</label><input id="phone"></div></div>
+            <div class="form-group"><label>Parent Name</label><input id="parent"></div>
+            <div class="form-group"><label>Email</label><input id="email"></div>
+            <div class="form-group"><label>Club History</label><input id="club"></div>
+            <div class="form-group"><label>Position</label><input id="pos"></div>
+            <div class="form-row"><div class="form-group"><label>Jersey Number</label><input id="jersey" placeholder="Tryout jersey #"></div>
+            <div class="form-group"><label>Field</label><input id="field" placeholder="Field #"></div></div>
+            <div class="form-group"><label>Medical Conditions</label><textarea id="med" rows="2"></textarea></div>
+            <div class="form-row"><div class="form-group"><label>Rating</label><select id="rating"><option value="">Select a Rating</option>${RATING_OPTIONS.map(r=>`<option>${r}</option>`).join('')}</select></div>
+            <div class="form-group"><label>Status</label><select id="status">${STATUS_OPTIONS.map(s=>`<option>${s}</option>`).join('')}</select></div></div>
+            <div class="form-group"><label>Team</label><select id="team"><option value=""></option>${TEAM_OPTIONS.map(t=>`<option>${t}</option>`).join('')}</select></div>
+            <div class="form-group"><label>Notes</label><textarea id="notes" rows="2"></textarea></div>`;
+        showModal("Add Walk-up Player", html, async () => {
+            let fn=document.getElementById('fn').value.trim(), ln=document.getElementById('ln').value.trim();
+            if(!fn||!ln) return alert("First and last name required");
+            let rating = document.getElementById('rating').value;
+            let newPlayer={ id:Date.now().toString(), firstName:fn, lastName:ln, dob:document.getElementById('dob').value||'', phoneNumber:document.getElementById('phone').value||'', parentName:document.getElementById('parent').value||'', email:document.getElementById('email').value||'', clubHistory:document.getElementById('club').value||'', position:document.getElementById('pos').value||'', field:document.getElementById('field').value||'', medicalConditions:document.getElementById('med').value||'', rating:rating || '', status:document.getElementById('status').value, assignedTeam:document.getElementById('team').value||'', jersey:document.getElementById('jersey').value||'', notes:document.getElementById('notes').value||'', ageGroup:currentAgeGroup };
+            const players=await getData(`players_${currentEventId}`)||{};
+            players[newPlayer.id]=newPlayer;
+            await setData(`players_${currentEventId}`,players);
+            await loadPlayersForEvent();
         });
-        render();
+    }
+    
+    async function importSpreadsheet(file) {
+        if (!currentEventId) return alert("Select event");
+        if (!currentAgeGroup) return alert("Select age group");
+        let data = await file.arrayBuffer();
+        let wb = XLSX.read(data);
+        let rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "" });
+        if(rows.length<2) return;
+        let h=rows[0], idx={first:-1,last:-1,dob:-1,phone:-1,parent:-1,email:-1,club:-1,medical:-1,field:-1};
+        h.forEach((v,i)=>{ let l=String(v).toUpperCase(); if(l.includes('FIRST')) idx.first=i; if(l.includes('LAST')) idx.last=i; if(l.includes('DOB')) idx.dob=i; if(l.includes('PHONE')) idx.phone=i; if(l.includes('PARENT')) idx.parent=i; if(l.includes('EMAIL')) idx.email=i; if(l.includes('CLUB')) idx.club=i; if(l.includes('MEDICAL')) idx.medical=i; if(l.includes('FIELD')) idx.field=i; });
+        let players=await getData(`players_${currentEventId}`)||{}, newCount=0, dupCount=0;
+        for(let i=1;i<rows.length;i++){
+            let r=rows[i], fn=r[idx.first]||'', ln=r[idx.last]||'', dob=r[idx.dob]||'', phone=r[idx.phone]?String(r[idx.phone]):'';
+            let dup=Object.values(players).some(p=>p.firstName===fn && p.lastName===ln && p.dob===dob && p.phoneNumber===phone && p.ageGroup===currentAgeGroup);
+            if(dup||(!fn&&!ln)){ dupCount++; continue; }
+            let newId = (Date.now() + newCount).toString();
+            players[newId] = { 
+                id: newId, 
+                firstName: fn, 
+                lastName: ln, 
+                dob: dob, 
+                phoneNumber: phone, 
+                parentName: r[idx.parent] || '', 
+                email: r[idx.email] || '', 
+                clubHistory: r[idx.club] || '', 
+                medicalConditions: r[idx.medical] || '', 
+                field: r[idx.field] || '', 
+                rating: '', 
+                status: 'Evaluate', 
+                assignedTeam: '', 
+                notes: '', 
+                position: '', 
+                jersey: '', 
+                ageGroup: currentAgeGroup 
+            };
+            newCount++;
+        }
+        await setData(`players_${currentEventId}`, players);
+        alert(`Imported: ${newCount} added, ${dupCount} duplicates skipped`);
+        await loadPlayersForEvent();
+    }
+    
+    async function loadEvents() {
+        const events = await getData('tryoutEvents') || {};
+        const eventSelect = document.getElementById('eventSelect');
+        eventSelect.innerHTML = '<option value="">Select event</option>';
+        for(let id in events){ let opt=document.createElement('option'); opt.value=id; opt.textContent=events[id].name; eventSelect.appendChild(opt); }
+        if(currentEventId && events[currentEventId]) eventSelect.value=currentEventId;
+        else if(eventSelect.options.length>1){ currentEventId=eventSelect.options[1].value; eventSelect.value=currentEventId; }
+        else{ currentEventId=null; }
+        currentAgeGroups = events[currentEventId]?.ageGroups || [];
+        const ageGroupSelect=document.getElementById('ageGroupSelect');
+        ageGroupSelect.innerHTML='<option value="">Select age group</option>';
+        currentAgeGroups.forEach(ag=>{ let opt=document.createElement('option'); opt.value=ag; opt.textContent=ag; ageGroupSelect.appendChild(opt); });
+        if(currentAgeGroup && currentAgeGroups.includes(currentAgeGroup)) ageGroupSelect.value=currentAgeGroup;
+        else if(currentAgeGroups.length>0){ currentAgeGroup=currentAgeGroups[0]; ageGroupSelect.value=currentAgeGroup; }
+        else currentAgeGroup=null;
+        await loadPlayersForEvent();
+    }
+    
+    async function loadPlayersForEvent() {
+        if(!currentEventId || !currentAgeGroup){ allPlayers=[]; renderCurrentView(); return; }
+        const data=await getData(`players_${currentEventId}`)||{};
+        allPlayers=Object.values(data).filter(p=>p.ageGroup===currentAgeGroup).map(p=>({...p, jersey:p.jersey||'', field:p.field||'', rating:p.rating||''}));
+        renderCurrentView();
+    }
+    
+    function renderCurrentView() { 
+        if(currentMode==="tryout") renderTryoutTable(); 
+        else renderRosterBuilder(); 
+    }
+    
+    function updateSortIndicators() {
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+            const indicator = th.querySelector('.sort-indicator');
+            const col = th.dataset.sort;
+            if (col === sortColumn) {
+                indicator.innerHTML = sortAsc ? ' ▲' : ' ▼';
+            } else {
+                indicator.innerHTML = '';
+            }
+        });
+    }
+    
+    window.openPlayerDetail = async function(playerId) {
+        const player = allPlayers.find(p => p.id === playerId);
+        if (!player) return;
+        
+        let html = `<div class="form-row"><div class="form-group"><label>First Name</label><input id="efn" value="${escapeHtml(player.firstName || '')}"></div>
+                    <div class="form-group"><label>Last Name</label><input id="eln" value="${escapeHtml(player.lastName || '')}"></div></div>
+                    <div class="form-row"><div class="form-group"><label>DOB</label><input id="edob" value="${escapeHtml(player.dob || '')}"></div>
+                    <div class="form-group"><label>Phone</label><input id="ephone" value="${escapeHtml(player.phoneNumber || '')}"></div></div>
+                    <div class="form-group"><label>Parent Name</label><input id="eparent" value="${escapeHtml(player.parentName || '')}"></div>
+                    <div class="form-group"><label>Email</label><input id="eemail" value="${escapeHtml(player.email || '')}"></div>
+                    <div class="form-group"><label>Club History</label><input id="eclub" value="${escapeHtml(player.clubHistory || '')}"></div>
+                    <div class="form-group"><label>Position</label><input id="epos" value="${escapeHtml(player.position || '')}"></div>
+                    <div class="form-row"><div class="form-group"><label>Jersey Number</label><input id="ejersey" value="${escapeHtml(player.jersey || '')}"></div>
+                    <div class="form-group"><label>Field</label><input id="efield" value="${escapeHtml(player.field || '')}"></div></div>
+                    <div class="form-group"><label>Medical Conditions</label><textarea id="emed" rows="2">${escapeHtml(player.medicalConditions || '')}</textarea></div>
+                    <div class="form-row"><div class="form-group"><label>Rating</label><select id="erating"><option value="">Select Rating</option>${RATING_OPTIONS.map(r => `<option ${player.rating === r ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
+                    <div class="form-group"><label>Status</label><select id="estatus">${STATUS_OPTIONS.map(s => `<option ${player.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div></div>
+                    <div class="form-group"><label>Team</label><select id="eteam"><option value=""></option>${TEAM_OPTIONS.map(t => `<option ${player.assignedTeam === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+                    <div class="form-group"><label>Notes</label><textarea id="enotes" rows="2">${escapeHtml(player.notes || '')}</textarea></div>
+                    <hr><button type="button" id="delPlayerBtn" class="btn btn-danger" style="width:100%">🗑️ Delete Player</button>`;
+        
+        showModal("Edit Player", html, async (modal) => {
+            const players = await getData(`players_${currentEventId}`) || {};
+            if (players[playerId]) {
+                players[playerId].firstName = document.getElementById('efn').value;
+                players[playerId].lastName = document.getElementById('eln').value;
+                players[playerId].dob = document.getElementById('edob').value;
+                players[playerId].phoneNumber = document.getElementById('ephone').value;
+                players[playerId].parentName = document.getElementById('eparent').value;
+                players[playerId].email = document.getElementById('eemail').value;
+                players[playerId].clubHistory = document.getElementById('eclub').value;
+                players[playerId].position = document.getElementById('epos').value;
+                players[playerId].jersey = document.getElementById('ejersey').value;
+                players[playerId].field = document.getElementById('efield').value;
+                players[playerId].medicalConditions = document.getElementById('emed').value;
+                players[playerId].rating = document.getElementById('erating').value;
+                players[playerId].status = document.getElementById('estatus').value;
+                players[playerId].assignedTeam = document.getElementById('eteam').value;
+                players[playerId].notes = document.getElementById('enotes').value;
+                await setData(`players_${currentEventId}`, players);
+                await loadPlayersForEvent();
+            }
+        });
+        
+        setTimeout(() => {
+            const delBtn = document.getElementById('delPlayerBtn');
+            if (delBtn) {
+                delBtn.onclick = async () => {
+                    if (confirm(`Delete ${player.firstName} ${player.lastName} permanently?`)) {
+                        await deleteChild(`players_${currentEventId}`, playerId);
+                        const modal = document.querySelector('.modal');
+                        if (modal) modal.remove();
+                        await loadPlayersForEvent();
+                    }
+                };
+            }
+        }, 100);
     };
-});
-
-function openPlayerModal(id) {
-    editPlayerId = id; const p = id ? globalData.players[id] : {};
-    document.getElementById('fFirst').value = p.firstName || '';
-    document.getElementById('fLast').value = p.lastName || '';
-    document.getElementById('fNum').value = p.number || '';
-    document.getElementById('fCurrentTeam').value = p.currentTeam || '';
-    document.getElementById('fField').value = p.field || '';
-    document.getElementById('fRating').value = p.rating || '';
-    document.getElementById('fTeamSelect').value = p.team || '';
-    document.getElementById('fStatus').value = p.status || 'Evaluated';
-    document.getElementById('fEmail').value = p.email || '';
-    document.getElementById('fPhone').value = p.phone || '';
-    document.getElementById('fMed').value = p.medical || '';
-    document.getElementById('fNotes').value = p.notes || '';
-    toggleModal('playerModal', true);
-}
-
-function savePlayer() {
-    const id = editPlayerId || 'p' + Date.now();
-    rtdb.ref('players/' + id).set({
-        id, contextTeamId: localView.team, contextSeasonId: localView.season,
-        firstName: document.getElementById('fFirst').value, lastName: document.getElementById('fLast').value,
-        number: document.getElementById('fNum').value, currentTeam: document.getElementById('fCurrentTeam').value,
-        field: document.getElementById('fField').value, rating: document.getElementById('fRating').value,
-        team: document.getElementById('fTeamSelect').value, status: document.getElementById('fStatus').value,
-        email: document.getElementById('fEmail').value, phone: document.getElementById('fPhone').value,
-        medical: document.getElementById('fMed').value, notes: document.getElementById('fNotes').value
+    
+    function renderTryoutTable() {
+        let filtered = allPlayers.filter(p => {
+            if(currentFilters.status.length && !currentFilters.status.includes(p.status)) return false;
+            if(currentFilters.rating.length && !currentFilters.rating.includes(p.rating)) return false;
+            if(currentFilters.team.length && !currentFilters.team.includes(p.assignedTeam)) return false;
+            return true;
+        });
+        
+        filtered.sort((a,b) => { 
+            let av = a[sortColumn] || '', bv = b[sortColumn] || ''; 
+            if(sortAsc) return av > bv ? 1 : -1;
+            else return av < bv ? 1 : -1;
+        });
+        
+        const tbody = document.getElementById('tryoutTbody');
+        tbody.innerHTML = '';
+        
+        for (let p of filtered) {
+            const row = tbody.insertRow();
+            
+            const jerseyCell = row.insertCell(0);
+            const jerseyInput = document.createElement('input');
+            jerseyInput.type = 'text';
+            jerseyInput.value = p.jersey || '';
+            jerseyInput.style.width = isCompactView ? '55px' : '70px';
+            jerseyInput.placeholder = '#';
+            jerseyInput.className = 'field-input';
+            jerseyInput.setAttribute('data-id', p.id);
+            jerseyInput.setAttribute('data-field', 'jersey');
+            jerseyInput.addEventListener('change', handleFieldChange);
+            jerseyCell.appendChild(jerseyInput);
+            
+            const fieldCell = row.insertCell(1);
+            const fieldInput = document.createElement('input');
+            fieldInput.type = 'text';
+            fieldInput.value = p.field || '';
+            fieldInput.style.width = isCompactView ? '55px' : '70px';
+            fieldInput.placeholder = 'F#';
+            fieldInput.className = 'field-input';
+            fieldInput.setAttribute('data-id', p.id);
+            fieldInput.setAttribute('data-field', 'field');
+            fieldInput.addEventListener('change', handleFieldChange);
+            fieldCell.appendChild(fieldInput);
+            
+            const firstNameCell = row.insertCell(2);
+            const firstNameLink = document.createElement('a');
+            firstNameLink.href = '#';
+            firstNameLink.className = 'player-link';
+            firstNameLink.textContent = p.firstName || '';
+            firstNameLink.onclick = (e) => {
+                e.preventDefault();
+                window.openPlayerDetail(p.id);
+            };
+            firstNameCell.appendChild(firstNameLink);
+            
+            const lastNameCell = row.insertCell(3);
+            const lastNameLink = document.createElement('a');
+            lastNameLink.href = '#';
+            lastNameLink.className = 'player-link';
+            lastNameLink.textContent = p.lastName || '';
+            lastNameLink.onclick = (e) => {
+                e.preventDefault();
+                window.openPlayerDetail(p.id);
+            };
+            lastNameCell.appendChild(lastNameLink);
+            
+            const clubCell = row.insertCell(4);
+            const clubInput = document.createElement('input');
+            clubInput.type = 'text';
+            clubInput.value = p.clubHistory || '';
+            clubInput.style.minWidth = isCompactView ? '120px' : '150px';
+            clubInput.className = 'field-input';
+            clubInput.setAttribute('data-id', p.id);
+            clubInput.setAttribute('data-field', 'clubHistory');
+            clubInput.addEventListener('change', handleFieldChange);
+            clubCell.appendChild(clubInput);
+            
+            const ratingCell = row.insertCell(5);
+            const ratingSelect = document.createElement('select');
+            ratingSelect.style.background = getRatingColor(p.rating);
+            ratingSelect.className = 'field-select';
+            ratingSelect.setAttribute('data-id', p.id);
+            ratingSelect.setAttribute('data-field', 'rating');
+            
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Select Rating';
+            ratingSelect.appendChild(defaultOption);
+            
+            for (let r of RATING_OPTIONS) {
+                const option = document.createElement('option');
+                option.value = r;
+                option.textContent = `${getRatingIcon(r)} ${r}`;
+                if (p.rating === r) option.selected = true;
+                ratingSelect.appendChild(option);
+            }
+            ratingSelect.addEventListener('change', handleFieldChange);
+            ratingCell.appendChild(ratingSelect);
+            
+            const teamCell = row.insertCell(6);
+            const teamSelect = document.createElement('select');
+            teamSelect.style.minWidth = isCompactView ? '110px' : '130px';
+            teamSelect.className = 'field-select';
+            teamSelect.setAttribute('data-id', p.id);
+            teamSelect.setAttribute('data-field', 'assignedTeam');
+            
+            const emptyTeamOption = document.createElement('option');
+            emptyTeamOption.value = '';
+            emptyTeamOption.textContent = 'Select Team';
+            teamSelect.appendChild(emptyTeamOption);
+            
+            for (let t of TEAM_OPTIONS) {
+                const option = document.createElement('option');
+                option.value = t;
+                option.textContent = t;
+                if (p.assignedTeam === t) option.selected = true;
+                teamSelect.appendChild(option);
+            }
+            teamSelect.addEventListener('change', handleFieldChange);
+            teamCell.appendChild(teamSelect);
+            
+            const statusCell = row.insertCell(7);
+            const statusSelect = document.createElement('select');
+            statusSelect.className = 'field-select';
+            statusSelect.setAttribute('data-id', p.id);
+            statusSelect.setAttribute('data-field', 'status');
+            
+            for (let s of STATUS_OPTIONS) {
+                const option = document.createElement('option');
+                option.value = s;
+                option.textContent = `${getStatusIcon(s)} ${s}`;
+                if (p.status === s) option.selected = true;
+                statusSelect.appendChild(option);
+            }
+            statusSelect.addEventListener('change', handleFieldChange);
+            statusCell.appendChild(statusSelect);
+            
+            const notesCell = row.insertCell(8);
+            const notesInput = document.createElement('input');
+            notesInput.type = 'text';
+            notesInput.value = p.notes || '';
+            notesInput.style.minWidth = isCompactView ? '120px' : '150px';
+            notesInput.className = 'field-input';
+            notesInput.setAttribute('data-id', p.id);
+            notesInput.setAttribute('data-field', 'notes');
+            notesInput.addEventListener('change', handleFieldChange);
+            notesCell.appendChild(notesInput);
+        }
+        
+        updateSortIndicators();
+    }
+    
+    function renderRosterBuilder() {
+        if(!currentAgeGroup){ 
+            document.getElementById('rosterGrid').innerHTML = '<div style="padding:40px;text-align:center;background:white;border-radius:28px;">Select an age group above</div>'; 
+            return; 
+        }
+        
+        const container = document.getElementById('rosterGrid');
+        container.innerHTML = TEAM_OPTIONS.map(team => {
+            let teamClass = team === 'ECNL' ? 'team-ecnl' : team === 'ECNL-RL' ? 'team-ecnl-rl' : team === 'Gold' ? 'team-gold' : 'team-not-offering';
+            return `<div class="team-col ${teamClass}" data-team="${team}"><h3>${team === 'ECNL' ? '⚽' : team === 'ECNL-RL' ? '🌟' : team === 'Gold' ? '🏆' : '❌'} ${team}</h3><div class="roster-dropzone" data-team="${team}"></div></div>`;
+        }).join('');
+        
+        const dropZones = document.querySelectorAll('.roster-dropzone');
+        dropZones.forEach(zone => {
+            let team = zone.getAttribute('data-team');
+            let playersForTeam = allPlayers.filter(p => p.assignedTeam === team);
+            zone.innerHTML = '';
+            if(playersForTeam.length === 0) {
+                zone.innerHTML = '<div class="roster-empty">Drop players here</div>';
+            }
+            playersForTeam.forEach(p => {
+                let card = document.createElement('div');
+                card.style.borderLeftColor = getRatingColor(p.rating);
+                card.className = 'player-card';
+                card.setAttribute('data-playerid', p.id);
+                card.innerHTML = `<div><div class="player-info">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}</div><div class="player-pos">${escapeHtml(p.position || 'Any')} ${p.jersey ? `#${escapeHtml(p.jersey)}` : ''} ${p.field ? `· F${escapeHtml(p.field)}` : ''}<br>${getRatingIcon(p.rating)} ${p.rating || 'No Rating'}</div></div><i class="fas fa-grip-vertical"></i>`;
+                card.onclick = (e) => { if(!e.target.closest('.fa-grip-vertical')) window.openPlayerDetail(p.id); };
+                zone.appendChild(card);
+            });
+        });
+        
+        if(sortableInstances.length) sortableInstances.forEach(s => s.destroy());
+        sortableInstances = [];
+        document.querySelectorAll('.roster-dropzone').forEach(zone => {
+            let s = new Sortable(zone, { 
+                group: { name: 'roster', pull: true, revertClone: false }, 
+                animation: 200, 
+                onEnd: async function(evt) { 
+                    let playerId = evt.item.getAttribute('data-playerid'); 
+                    let newTeam = evt.to.getAttribute('data-team'); 
+                    if(playerId && newTeam) await updateAndRefresh(playerId, 'assignedTeam', newTeam); 
+                } 
+            });
+            sortableInstances.push(s);
+        });
+        
+        renderUnassignedPool();
+    }
+    
+    function renderUnassignedPool() {
+        let unassignedPlayers = allPlayers.filter(p => !p.assignedTeam || p.assignedTeam === '');
+        let ratingFilter = document.getElementById('unassignedRatingFilter')?.value || 'all';
+        let statusFilter = document.getElementById('unassignedStatusFilter')?.value || 'all';
+        let searchFilter = document.getElementById('unassignedSearchFilter')?.value.toLowerCase() || '';
+        
+        let filtered = unassignedPlayers.filter(p => {
+            if(ratingFilter !== 'all' && p.rating !== ratingFilter) return false;
+            if(statusFilter !== 'all' && p.status !== statusFilter) return false;
+            if(searchFilter && !`${p.firstName} ${p.lastName}`.toLowerCase().includes(searchFilter)) return false;
+            return true;
+        });
+        
+        const container = document.getElementById('unassignedDropzone');
+        if(!container) return;
+        
+        container.innerHTML = '';
+        if(filtered.length === 0){
+            container.innerHTML = '<div style="text-align:center;padding:40px;color:#64748b;">No unassigned players found</div>';
+            return;
+        }
+        
+        filtered.forEach(p => {
+            let card = document.createElement('div');
+            card.style.borderLeftColor = getRatingColor(p.rating);
+            card.className = 'unassigned-player-card';
+            card.setAttribute('data-playerid', p.id);
+            card.innerHTML = `
+                <div class="unassigned-player-info">
+                    <div class="unassigned-player-name">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)} ${p.jersey ? `<span style="background:#e2e8f0;padding:2px 6px;border-radius:12px;font-size:0.7rem;">#${escapeHtml(p.jersey)}</span>` : ''}</div>
+                    <div class="unassigned-player-details">
+                        <span><span class="rating-dot" style="background:${getRatingColor(p.rating)}"></span>${getRatingIcon(p.rating)} ${p.rating || 'No Rating'}</span>
+                        <span>${getStatusIcon(p.status)} ${p.status || 'Evaluate'}</span>
+                        ${p.field ? `<span><i class="fas fa-map-marker-alt"></i> Field ${escapeHtml(p.field)}</span>` : ''}
+                    </div>
+                </div>
+                <i class="fas fa-grip-vertical" style="color:#cbd5e1;"></i>
+            `;
+            card.onclick = (e) => { if(!e.target.closest('.fa-grip-vertical')) window.openPlayerDetail(p.id); };
+            container.appendChild(card);
+        });
+        
+        if(unassignedSortable) unassignedSortable.destroy();
+        unassignedSortable = new Sortable(container, {
+            group: { name: 'roster', pull: true, revertClone: false },
+            animation: 200,
+            sort: true,
+            onEnd: async function(evt) {
+                let playerId = evt.item.getAttribute('data-playerid');
+                let newTeam = evt.to.getAttribute('data-team');
+                if(playerId && newTeam) {
+                    await updateAndRefresh(playerId, 'assignedTeam', newTeam);
+                }
+            }
+        });
+    }
+    
+    function filterClickHandler(e){
+        let type = e.currentTarget.dataset.filterType, val = e.currentTarget.dataset.val;
+        let idx = currentFilters[type].indexOf(val);
+        if(idx === -1){ 
+            currentFilters[type].push(val); 
+            e.currentTarget.classList.add('active-filter'); 
+        } else { 
+            currentFilters[type].splice(idx,1); 
+            e.currentTarget.classList.remove('active-filter'); 
+        }
+        renderTryoutTable();
+    }
+    
+    function clearFilters(){ 
+        currentFilters = { status: [], rating: [], team: [] }; 
+        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active-filter')); 
+        renderTryoutTable(); 
+    }
+    
+    // Event binding
+    document.getElementById('openEventManagerBtn').onclick = openEventManager;
+    document.getElementById('importSpreadsheetBtn').onclick = () => { 
+        if(!currentAgeGroup) return alert("Select age group first"); 
+        let inp = document.createElement('input'); 
+        inp.type = 'file'; 
+        inp.accept = '.xlsx,.xls'; 
+        inp.onchange = e => importSpreadsheet(e.target.files[0]); 
+        inp.click(); 
+    };
+    document.getElementById('addWalkupBtn').onclick = addWalkup;
+    document.getElementById('clearFiltersBtn').onclick = clearFilters;
+    document.getElementById('forceRefreshBtn').onclick = forceRefresh;
+    document.getElementById('compactViewToggle').onchange = toggleCompactView;
+    document.getElementById('eventSelect').onchange = (e) => { currentEventId = e.target.value; loadEvents(); };
+    document.getElementById('ageGroupSelect').onchange = (e) => { currentAgeGroup = e.target.value; loadPlayersForEvent(); };
+    document.getElementById('unassignedRatingFilter')?.addEventListener('change', () => renderUnassignedPool());
+    document.getElementById('unassignedStatusFilter')?.addEventListener('change', () => renderUnassignedPool());
+    document.getElementById('unassignedSearchFilter')?.addEventListener('input', () => renderUnassignedPool());
+    
+    document.querySelectorAll('.mode-tab').forEach(btn => { 
+        btn.onclick = () => { 
+            currentMode = btn.dataset.mode; 
+            document.getElementById('tryoutView').style.display = currentMode === 'tryout' ? 'block' : 'none'; 
+            document.getElementById('rosterView').style.display = currentMode === 'roster' ? 'block' : 'none'; 
+            document.querySelectorAll('.mode-tab').forEach(b => b.classList.remove('active')); 
+            btn.classList.add('active'); 
+            renderCurrentView(); 
+        }; 
     });
-    toggleModal('playerModal', false);
-}
-
-function sendMail(opt) {
-    const fn = document.getElementById('fFirst').value, em = document.getElementById('fEmail').value;
-    if(!em) return alert("Email required.");
-    let sub = "Tryout Update", body = "";
-    if(opt===1) body = `Thanks ${fn} for a great tryout. We'd love to see you back.`;
-    else if(opt===2) body = `Congrats ${fn}! We are offering you a spot.`;
-    else body = "Hi, [Custom Message]";
-    window.location.href = `mailto:${em}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`;
-}
-
-if ('webkitSpeechRecognition' in window) {
-    const rec = new webkitSpeechRecognition(); rec.continuous = true;
-    document.getElementById('voiceToggle').onclick = function() {
-        if(this.classList.contains('recording')) { rec.stop(); this.classList.remove('recording'); }
-        else { rec.start(); this.classList.add('recording'); }
-    };
-    rec.onresult = (e) => { document.getElementById('fNotes').value += " " + e.results[e.results.length-1][0].transcript; };
-}
+    document.querySelector('.mode-tab[data-mode="tryout"]').classList.add('active');
+    
+    document.querySelectorAll('th[data-sort]').forEach(th => { 
+        th.onclick = () => { 
+            let col = th.dataset.sort; 
+            if(sortColumn === col) sortAsc = !sortAsc; 
+            else { sortColumn = col; sortAsc = true; } 
+            renderTryoutTable(); 
+        }; 
+    });
+    document.querySelectorAll('.filter-btn').forEach(btn => btn.addEventListener('click', filterClickHandler));
+    
+    // Initialize view mode
+    applyViewMode();
+    loadEvents();
 </script>
 </body>
 </html>
