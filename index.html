@@ -223,7 +223,13 @@
 	appId: "1:378551140348:web:b84305dede4bd1a028bc79",
 	measurementId: "G-PGQP39G25G"
 	};
-    
+
+	// Add this after firebase.initializeApp(firebaseConfig);
+	const testDb = firebase.database();
+	testDb.ref('test').set({ message: 'Hello Firebase', timestamp: Date.now() })
+  	.then(() => console.log('✅ Firebase write successful!'))
+  	.catch((error) => console.error('❌ Firebase error:', error));
+	
     let useFirebase = false, db = null;
     let currentEventId = null, currentAgeGroup = null;
     let currentMode = "tryout";
