@@ -3,102 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Soccer Tryouts Manager | Real-Time Updates</title>
+    <title>Soccer Tryouts Manager | Complete System</title>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-    <!-- Drag & Drop library: SortableJS -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+    <!-- Drag & Drop -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <!-- SheetJS for Excel import -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
-    <!-- Font Awesome 6 -->
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
+        /* Same styles as before - keeping it compact for brevity */
         * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
-        body { background: #f0f7ff; margin: 0; padding: 20px; }
+        body { background: #f0f7ff; margin: 0; padding: 20px; transition: all 0.2s; }
+        
+        .login-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #1e3c72 0%, #2c7da0 100%); position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 2000; }
+        .login-card { background: white; border-radius: 32px; padding: 40px; width: 100%; max-width: 420px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; }
+        .login-card h1 { color: #1e3c72; margin-bottom: 10px; }
+        .login-card input { width: 100%; padding: 12px 16px; margin: 10px 0; border: 1px solid #cbd5e1; border-radius: 30px; font-size: 1rem; }
+        .login-card button { width: 100%; padding: 12px; margin-top: 20px; background: #2c7da0; color: white; border: none; border-radius: 30px; font-size: 1rem; font-weight: 600; cursor: pointer; }
+        .login-card .create-account-link { margin-top: 20px; font-size: 0.85rem; color: #2c7da0; cursor: pointer; }
+        .login-card .error { color: #c1292e; margin-top: 15px; font-size: 0.85rem; }
+        
+        #mainApp { display: none; }
         .app-container { max-width: 1600px; margin: 0 auto; }
         
-        .selection-bar { background: white; border-radius: 40px; padding: 16px 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; gap: 20px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+        body.compact-view .selection-bar { padding: 8px 16px; margin-bottom: 12px; }
+        body.compact-view .mode-tab { padding: 6px 20px; font-size: 0.85rem; }
+        body.compact-view .mode-tabs { margin-bottom: 12px; }
+        body.compact-view .filter-bar { margin: 10px 0 8px; padding: 6px 12px; }
+        body.compact-view th, body.compact-view td { padding: 4px 6px; font-size: 0.75rem; }
+        body.compact-view input, body.compact-view select { padding: 3px 5px; font-size: 0.7rem; }
+        body.compact-view .btn { padding: 4px 10px; font-size: 0.75rem; }
+        body.compact-view .player-card { padding: 6px 8px; margin: 4px 0; }
+        
+        body.comfort-view .selection-bar { padding: 16px 24px; margin-bottom: 24px; }
+        body.comfort-view .mode-tab { padding: 12px 28px; font-size: 1rem; }
+        body.comfort-view .mode-tabs { margin-bottom: 24px; }
+        body.comfort-view .filter-bar { margin: 20px 0 16px; padding: 12px 20px; }
+        body.comfort-view th, body.comfort-view td { padding: 12px 8px; font-size: 0.85rem; }
+        body.comfort-view input, body.comfort-view select { padding: 6px 8px; font-size: 0.8rem; }
+        
+        .selection-bar { background: white; border-radius: 40px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .selection-group { display: flex; align-items: center; gap: 12px; background: #f1f5f9; padding: 8px 20px; border-radius: 40px; }
         .selection-group label { font-weight: 600; font-size: 0.9rem; color: #1e3c72; }
-        .selection-group select { padding: 8px 16px; border-radius: 30px; border: 1px solid #cbd5e1; background: white; font-size: 0.9rem; cursor: pointer; min-width: 150px; }
-        .event-manager-btn { background: #2c7da0; color: white; border: none; padding: 8px 20px; border-radius: 30px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px; }
-        
-        .mode-tabs { display: flex; gap: 12px; margin-bottom: 24px; border-bottom: 2px solid #e2e8f0; }
-        .mode-tab { padding: 12px 28px; background: none; border: none; font-size: 1rem; font-weight: 600; cursor: pointer; color: #64748b; transition: 0.2s; }
-        .mode-tab.active { color: #2c7da0; border-bottom: 3px solid #2c7da0; margin-bottom: -2px; }
-        
-        .btn { background: #2c7da0; color: white; border: none; padding: 8px 16px; border-radius: 30px; cursor: pointer; font-weight: 500; transition: 0.2s; }
-        .btn-danger { background: #c1292e; }
-        .btn-outline { background: white; border: 1px solid #2c7da0; color: #2c7da0; }
-        .btn-sm { padding: 4px 12px; font-size: 0.8rem; }
+        .selection-group select { padding: 8px 16px; border-radius: 30px; border: 1px solid #cbd5e1; background: white; cursor: pointer; }
+        .btn { background: #2c7da0; color: white; border: none; border-radius: 30px; cursor: pointer; font-weight: 500; transition: 0.2s; padding: 8px 16px; }
         .btn:hover { opacity: 0.85; transform: translateY(-1px); }
-        
-        .filter-bar { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0 16px; background: white; padding: 12px 20px; border-radius: 40px; align-items: center; }
+        .btn-outline { background: white; border: 1px solid #2c7da0; color: #2c7da0; }
+        .btn-danger { background: #c1292e; }
+        .btn-sm { padding: 4px 12px; font-size: 0.8rem; }
+        .mode-tabs { display: flex; gap: 12px; border-bottom: 2px solid #e2e8f0; }
+        .mode-tab { background: none; border: none; font-weight: 600; cursor: pointer; color: #64748b; transition: 0.2s; padding: 12px 28px; }
+        .mode-tab.active { color: #2c7da0; border-bottom: 3px solid #2c7da0; margin-bottom: -2px; }
+        .filter-bar { display: flex; flex-wrap: wrap; gap: 12px; background: white; border-radius: 40px; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); padding: 12px 20px; margin: 20px 0 16px; }
         .filter-group { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; background: #f1f5f9; padding: 6px 12px; border-radius: 40px; }
         .filter-group-title { font-weight: 600; font-size: 0.8rem; margin-right: 4px; }
-        .filter-btn { background: transparent; border: none; padding: 6px 14px; border-radius: 40px; cursor: pointer; font-size: 0.8rem; font-weight: 500; transition: 0.1s; }
+        .filter-btn { background: transparent; border: none; padding: 6px 14px; border-radius: 40px; cursor: pointer; font-size: 0.8rem; font-weight: 500; }
         .filter-btn:hover { background: #e2e8f0; }
         .filter-btn.active-filter { background: #1e3c72; color: white; }
-        
-        .player-link { color: #0f4c5c; text-decoration: underline; cursor: pointer; font-weight: 600; }
-        .player-link:hover { color: #2c7da0; }
-        
-        input, select, textarea { padding: 6px 8px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 0.8rem; }
-        
-        /* Table View Modes */
-        .tryout-table-wrapper { overflow-x: auto; background: white; border-radius: 24px; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-        
-        /* Comfort View (default) */
-        .view-comfort th, .view-comfort td { padding: 12px 8px; }
-        .view-comfort .filter-bar { margin: 20px 0 16px; }
-        
-        /* Compact View */
-        .view-compact th, .view-compact td { padding: 4px 6px; }
-        .view-compact .filter-bar { margin: 10px 0 8px; padding: 8px 16px; }
-        .view-compact .mode-tabs { margin-bottom: 16px; }
-        .view-compact .mode-tab { padding: 8px 20px; }
-        .view-compact .selection-bar { padding: 12px 20px; margin-bottom: 16px; }
-        .view-compact input, .view-compact select, .view-compact textarea { padding: 4px 6px; font-size: 0.75rem; }
-        .view-compact .player-link { font-size: 0.8rem; }
-        .view-compact .status-icon { padding: 2px 6px; font-size: 0.7rem; }
-        
-        th { background: #f8fafc; cursor: pointer; user-select: none; position: sticky; top: 0; white-space: nowrap; }
+        .player-link { color: #0f4c5c; text-decoration: underline; cursor: pointer; }
+        .tryout-table-wrapper { overflow-x: auto; background: white; border-radius: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f8fafc; cursor: pointer; user-select: none; position: sticky; top: 0; white-space: nowrap; padding: 12px 8px; }
         th:hover { background: #e2e8f0; }
+        td { padding: 12px 8px; border-bottom: 1px solid #e2e8f0; }
         .sort-indicator { margin-left: 5px; font-size: 0.7rem; display: inline-block; }
-        
-        .view-toggle { display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 4px 12px; border-radius: 40px; }
-        .view-toggle label { font-size: 0.8rem; font-weight: 500; color: #334155; cursor: pointer; }
-        .view-toggle input { margin: 0; cursor: pointer; width: 36px; height: 20px; }
-        
         .roster-grid { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 30px; }
-        .team-col { flex: 1; min-width: 260px; background: #fefcf5; border-radius: 28px; padding: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); border-top: 8px solid; }
-        .team-col h3 { margin-top: 0; display: flex; justify-content: space-between; align-items: center; font-size: 1.1rem; }
-        .roster-dropzone { min-height: 200px; max-height: 500px; overflow-y: auto; }
-        
-        .player-card { background: white; margin: 8px 0; padding: 10px 12px; border-radius: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: grab; transition: 0.1s; border-left: 5px solid; display: flex; justify-content: space-between; align-items: center; }
-        .player-card:active { cursor: grabbing; }
-        .player-info { font-weight: 500; font-size: 0.85rem; } 
-        .player-pos { font-size: 0.7rem; color: gray; }
-        .roster-empty { color: #aaa; text-align: center; padding: 20px; font-style: italic; }
-        
-        .unassigned-pool { background: white; border-radius: 28px; padding: 20px; margin-top: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        .unassigned-pool h3 { margin-top: 0; color: #1e3c72; display: flex; align-items: center; gap: 10px; }
-        .unassigned-filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-        .unassigned-dropzone { min-height: 300px; max-height: 400px; overflow-y: auto; background: #f8fafc; border-radius: 20px; padding: 12px; border: 2px dashed #cbd5e1; }
-        .unassigned-player-card { background: white; margin: 8px 0; padding: 10px 12px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: grab; transition: 0.1s; border-left: 5px solid; display: flex; justify-content: space-between; align-items: center; }
-        .unassigned-player-card:active { cursor: grabbing; }
-        .unassigned-player-info { flex: 1; }
-        .unassigned-player-name { font-weight: 600; font-size: 0.85rem; }
-        .unassigned-player-details { font-size: 0.7rem; color: #64748b; margin-top: 4px; display: flex; flex-wrap: wrap; gap: 8px; }
-        .rating-dot { display: inline-block; width: 10px; height: 10px; border-radius: 10px; margin-right: 4px; }
-        
+        .team-col { flex: 1; min-width: 260px; background: #fefcf5; border-radius: 28px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); border-top: 8px solid; padding: 16px; }
         .team-ecnl { border-top-color: #2c7da0; }
         .team-ecnl-rl { border-top-color: #2a9d8f; }
         .team-gold { border-top-color: #e9c46a; }
         .team-not-offering { border-top-color: #9e2a2b; }
-        
+        .team-col h3 { margin-top: 0; display: flex; justify-content: space-between; align-items: center; font-size: 1.1rem; padding: 0 8px; }
+        .roster-dropzone { min-height: 200px; max-height: 500px; overflow-y: auto; }
+        .player-card { background: white; margin: 8px 0; border-radius: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: grab; border-left: 5px solid; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; }
+        .unassigned-pool { background: white; border-radius: 28px; margin-top: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 20px; }
+        .unassigned-pool h3 { margin-top: 0; color: #1e3c72; display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+        .unassigned-filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; padding: 0 8px; }
+        .unassigned-dropzone { background: #f8fafc; border-radius: 20px; padding: 12px; border: 2px dashed #cbd5e1; min-height: 300px; max-height: 400px; overflow-y: auto; }
+        .unassigned-player-card { background: white; margin: 8px 0; padding: 10px 12px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: grab; border-left: 5px solid; display: flex; justify-content: space-between; align-items: center; }
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
         .modal-card { background: white; max-width: 700px; width: 90%; border-radius: 32px; padding: 28px; max-height: 85vh; overflow-y: auto; }
         .form-group { margin-bottom: 16px; }
@@ -106,98 +92,138 @@
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border-radius: 12px; border: 1px solid #cbd5e1; }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
-        
-        .storage-badge { background: #fef3c7; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; }
-        .debug-toast { position: fixed; bottom: 20px; right: 20px; background: #333; color: white; padding: 8px 16px; border-radius: 8px; font-size: 12px; z-index: 9999; }
+        .user-badge { background: #e0f2fe; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; display: flex; align-items: center; gap: 8px; }
+        .storage-badge { background: #dcfce7; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; }
+        .view-toggle { display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 4px 12px; border-radius: 40px; cursor: pointer; }
+        input, select, textarea { border-radius: 12px; border: 1px solid #cbd5e1; }
     </style>
 </head>
-<body>
-<div class="app-container">
-    <div class="selection-bar">
-        <div class="selection-group">
-            <label><i class="fas fa-calendar-alt"></i> Tryout Event:</label>
-            <select id="eventSelect"></select>
-        </div>
-        <div class="selection-group">
-            <label><i class="fas fa-users"></i> Age Group:</label>
-            <select id="ageGroupSelect"></select>
-        </div>
-        <button id="openEventManagerBtn" class="event-manager-btn"><i class="fas fa-cog"></i> Event Manager</button>
-        <div class="view-toggle">
-            <label><i class="fas fa-compress"></i> Compact</label>
-            <input type="checkbox" id="compactViewToggle">
-            <label><i class="fas fa-expand"></i> Comfort</label>
-        </div>
-        <span id="storageBadge" class="storage-badge"><i class="fas fa-database"></i> Loading...</span>
+<body class="comfort-view">
+<!-- Login Screen -->
+<div id="loginContainer" class="login-container">
+    <div class="login-card">
+        <i class="fas fa-futbol" style="font-size: 48px; color: #2c7da0;"></i>
+        <h1>Tryouts Manager</h1>
+        <div class="subtitle" style="color:#64748b; margin-bottom:20px;">Sign in to access player data</div>
+        <input type="email" id="loginEmail" placeholder="Email">
+        <input type="password" id="loginPassword" placeholder="Password">
+        <button id="loginBtn">Sign In</button>
+        <div class="create-account-link" id="showSignupBtn">Need an account? Create one</div>
+        <div id="loginError" class="error"></div>
     </div>
-    
-    <div class="mode-tabs">
-        <button class="mode-tab" data-mode="tryout">📋 Tryout List</button>
-        <button class="mode-tab" data-mode="roster">🏗️ Roster Builder</button>
-    </div>
+</div>
 
-    <div id="tryoutView">
-        <div class="filter-bar">
-            <div class="filter-group"><span class="filter-group-title">Status:</span>
-                <button class="filter-btn" data-filter-type="status" data-val="Evaluate">🔍 Evaluate</button>
-                <button class="filter-btn" data-filter-type="status" data-val="Offered">📋 Offered</button>
-                <button class="filter-btn" data-filter-type="status" data-val="Committed">✅ Committed</button>
-                <button class="filter-btn" data-filter-type="status" data-val="Declined">❌ Declined</button>
-                <button class="filter-btn" data-filter-type="status" data-val="Not Offering">🚫 Not Offering</button>
-            </div>
-            <div class="filter-group"><span class="filter-group-title">Rating:</span>
-                <button class="filter-btn" data-filter-type="rating" data-val="Elite">⭐ Elite</button>
-                <button class="filter-btn" data-filter-type="rating" data-val="Premier">🏅 Premier</button>
-                <button class="filter-btn" data-filter-type="rating" data-val="Competitive">⚡ Competitive</button>
-                <button class="filter-btn" data-filter-type="rating" data-val="Recreational">🌿 Recreational</button>
-            </div>
-            <div class="filter-group"><span class="filter-group-title">Team:</span>
-                <button class="filter-btn" data-filter-type="team" data-val="ECNL">ECNL</button>
-                <button class="filter-btn" data-filter-type="team" data-val="ECNL-RL">ECNL-RL</button>
-                <button class="filter-btn" data-filter-type="team" data-val="Gold">Gold</button>
-                <button class="filter-btn" data-filter-type="team" data-val="Not Offering">Not Offering</button>
-            </div>
-            <div><button id="importSpreadsheetBtn" class="btn"><i class="fas fa-upload"></i> Import</button>
-            <button id="addWalkupBtn" class="btn btn-outline"><i class="fas fa-user-plus"></i> Walk-up</button>
-            <button id="clearFiltersBtn" class="btn btn-outline btn-sm"><i class="fas fa-eraser"></i> Clear</button>
-            <button id="forceRefreshBtn" class="btn btn-outline btn-sm"><i class="fas fa-sync-alt"></i> Refresh</button></div>
-        </div>
-        <div class="tryout-table-wrapper">
-            <table id="tryoutTable">
-                <thead>
-                    <tr>
-                        <th data-sort="jersey">Jersey <span class="sort-indicator"></span></th>
-                        <th data-sort="field">Field <span class="sort-indicator"></span></th>
-                        <th data-sort="firstName">First <span class="sort-indicator"></span></th>
-                        <th data-sort="lastName">Last <span class="sort-indicator"></span></th>
-                        <th data-sort="club">Club History <span class="sort-indicator"></span></th>
-                        <th data-sort="rating">Rating <span class="sort-indicator"></span></th>
-                        <th data-sort="assignedTeam">Team <span class="sort-indicator"></span></th>
-                        <th data-sort="status">Status <span class="sort-indicator"></span></th>
-                        <th data-sort="notes">Notes <span class="sort-indicator"></span></th>
-                    </tr>
-                </thead>
-                <tbody id="tryoutTbody"></tbody>
-            </table>
-        </div>
+<!-- Signup Screen -->
+<div id="signupContainer" class="login-container" style="display: none;">
+    <div class="login-card">
+        <i class="fas fa-futbol" style="font-size: 48px; color: #2c7da0;"></i>
+        <h1>Create Account</h1>
+        <div class="subtitle" style="color:#64748b; margin-bottom:20px;">Sign up to start managing tryouts</div>
+        <input type="email" id="signupEmail" placeholder="Email">
+        <input type="password" id="signupPassword" placeholder="Password (min 6 characters)">
+        <input type="password" id="signupConfirmPassword" placeholder="Confirm Password">
+        <button id="signupBtn">Create Account</button>
+        <div class="create-account-link" id="showLoginBtn">Already have an account? Sign in</div>
+        <div id="signupError" class="error"></div>
     </div>
+</div>
 
-    <div id="rosterView" style="display:none;">
-        <div class="roster-grid" id="rosterGrid"></div>
+<!-- Main App -->
+<div id="mainApp">
+    <div class="app-container">
+        <div class="selection-bar">
+            <div class="selection-group">
+                <label>Tryout Event:</label>
+                <select id="eventSelect"></select>
+            </div>
+            <div class="selection-group">
+                <label>Age Group:</label>
+                <select id="ageGroupSelect"></select>
+            </div>
+            <button id="openEventManagerBtn" class="btn">Event Manager</button>
+            <div class="view-toggle" id="viewToggle">
+                <i class="fas fa-compress"></i>
+                <label>Compact</label>
+                <input type="checkbox" id="compactViewToggle">
+                <label>Comfort</label>
+                <i class="fas fa-expand"></i>
+            </div>
+            <div class="user-badge" id="userBadge">
+                <i class="fas fa-user-circle"></i>
+                <span id="userEmail"></span>
+            </div>
+            <button id="logoutBtn" class="btn btn-danger">Logout</button>
+            <span id="storageBadge" class="storage-badge">Cloud Sync</span>
+        </div>
         
-        <div class="unassigned-pool">
-            <h3><i class="fas fa-users"></i> Unassigned Players Pool</h3>
-            <div class="unassigned-filters">
+        <div class="mode-tabs">
+            <button class="mode-tab" data-mode="tryout">📋 Tryout List</button>
+            <button class="mode-tab" data-mode="roster">🏗️ Roster Builder</button>
+        </div>
+
+        <div id="tryoutView">
+            <div class="filter-bar">
                 <div class="filter-group">
-                    <span class="filter-group-title">Filter by:</span>
-                    <select id="unassignedRatingFilter" style="padding: 6px 12px;">
+                    <span class="filter-group-title">Status:</span>
+                    <button class="filter-btn" data-filter-type="status" data-val="Evaluate">🔍 Evaluate</button>
+                    <button class="filter-btn" data-filter-type="status" data-val="Offered">📋 Offered</button>
+                    <button class="filter-btn" data-filter-type="status" data-val="Committed">✅ Committed</button>
+                    <button class="filter-btn" data-filter-type="status" data-val="Declined">❌ Declined</button>
+                    <button class="filter-btn" data-filter-type="status" data-val="Not Offering">🚫 Not Offering</button>
+                </div>
+                <div class="filter-group">
+                    <span class="filter-group-title">Rating:</span>
+                    <button class="filter-btn" data-filter-type="rating" data-val="Elite">⭐ Elite</button>
+                    <button class="filter-btn" data-filter-type="rating" data-val="Premier">🏅 Premier</button>
+                    <button class="filter-btn" data-filter-type="rating" data-val="Competitive">⚡ Competitive</button>
+                    <button class="filter-btn" data-filter-type="rating" data-val="Recreational">🌿 Recreational</button>
+                </div>
+                <div class="filter-group">
+                    <span class="filter-group-title">Team:</span>
+                    <button class="filter-btn" data-filter-type="team" data-val="ECNL">ECNL</button>
+                    <button class="filter-btn" data-filter-type="team" data-val="ECNL-RL">ECNL-RL</button>
+                    <button class="filter-btn" data-filter-type="team" data-val="Gold">Gold</button>
+                    <button class="filter-btn" data-filter-type="team" data-val="Not Offering">Not Offering</button>
+                </div>
+                <div>
+                    <button id="importSpreadsheetBtn" class="btn"><i class="fas fa-upload"></i> Import</button>
+                    <button id="addWalkupBtn" class="btn btn-outline"><i class="fas fa-user-plus"></i> Walk-up</button>
+                    <button id="clearFiltersBtn" class="btn btn-outline btn-sm"><i class="fas fa-eraser"></i> Clear</button>
+                </div>
+            </div>
+            <div class="tryout-table-wrapper">
+                <table id="tryoutTable">
+                    <thead>
+                        <tr>
+                            <th data-sort="jersey">Jersey <span class="sort-indicator"></span></th>
+                            <th data-sort="field">Field <span class="sort-indicator"></span></th>
+                            <th data-sort="firstName">First <span class="sort-indicator"></span></th>
+                            <th data-sort="lastName">Last <span class="sort-indicator"></span></th>
+                            <th data-sort="clubHistory">Club History <span class="sort-indicator"></span></th>
+                            <th data-sort="rating">Rating <span class="sort-indicator"></span></th>
+                            <th data-sort="assignedTeam">Team <span class="sort-indicator"></span></th>
+                            <th data-sort="status">Status <span class="sort-indicator"></span></th>
+                            <th data-sort="notes">Notes <span class="sort-indicator"></span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tryoutTbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="rosterView" style="display:none;">
+            <div class="roster-grid" id="rosterGrid"></div>
+            <div class="unassigned-pool">
+                <h3><i class="fas fa-users"></i> Unassigned Players Pool</h3>
+                <div class="unassigned-filters">
+                    <select id="unassignedRatingFilter">
                         <option value="all">All Ratings</option>
                         <option value="Elite">⭐ Elite</option>
                         <option value="Premier">🏅 Premier</option>
                         <option value="Competitive">⚡ Competitive</option>
                         <option value="Recreational">🌿 Recreational</option>
                     </select>
-                    <select id="unassignedStatusFilter" style="padding: 6px 12px;">
+                    <select id="unassignedStatusFilter">
                         <option value="all">All Status</option>
                         <option value="Evaluate">🔍 Evaluate</option>
                         <option value="Offered">📋 Offered</option>
@@ -205,33 +231,45 @@
                         <option value="Declined">❌ Declined</option>
                         <option value="Not Offering">🚫 Not Offering</option>
                     </select>
-                    <input type="text" id="unassignedSearchFilter" placeholder="Search name..." style="padding: 6px 12px; width: 200px;">
+                    <input type="text" id="unassignedSearchFilter" placeholder="Search name...">
                 </div>
+                <div id="unassignedDropzone" class="unassigned-dropzone"></div>
             </div>
-            <div id="unassignedDropzone" class="unassigned-dropzone"></div>
         </div>
     </div>
 </div>
 
 <script>
+    // ======================== FIREBASE CONFIG ==================
+    // !!! REPLACE WITH YOUR ACTUAL FIREBASE CREDENTIALS !!!
     const firebaseConfig = {
 	apiKey: "AIzaSyBQz_2K0tNUfH5-CAxeuxGHiOPI6MEM95k",
 	authDomain: "snefc-scout.firebaseapp.com",
+	databaseURL: "https://snefc-scout-default-rtdb.firebaseio.com",
 	projectId: "snefc-scout",
 	storageBucket: "snefc-scout.firebasestorage.app",
 	messagingSenderId: "378551140348",
 	appId: "1:378551140348:web:b84305dede4bd1a028bc79",
 	measurementId: "G-PGQP39G25G"
 	};
-
-	// Add this after firebase.initializeApp(firebaseConfig);
-	const testDb = firebase.database();
-	testDb.ref('test').set({ message: 'Hello Firebase', timestamp: Date.now() })
-  	.then(() => console.log('✅ Firebase write successful!'))
-  	.catch((error) => console.error('❌ Firebase error:', error));
-	
-    let useFirebase = false, db = null;
-    let currentEventId = null, currentAgeGroup = null;
+    
+    // Initialize Firebase
+    let db, auth;
+    try {
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        auth = firebase.auth();
+        db = firebase.database();
+        console.log("Firebase initialized");
+    } catch(e) {
+        console.error("Firebase init error:", e);
+    }
+    
+    // App state
+    let currentUser = null;
+    let currentEventId = null;
+    let currentAgeGroup = null;
     let currentMode = "tryout";
     let currentFilters = { status: [], rating: [], team: [] };
     let sortColumn = "firstName", sortAsc = true;
@@ -239,78 +277,48 @@
     let currentAgeGroups = [];
     let sortableInstances = [];
     let unassignedSortable = null;
-    let isCompactView = false;
     
     const TEAM_OPTIONS = ["ECNL", "ECNL-RL", "Gold", "Not Offering"];
     const RATING_OPTIONS = ["Elite", "Premier", "Competitive", "Recreational"];
     const STATUS_OPTIONS = ["Evaluate", "Offered", "Committed", "Declined", "Not Offering"];
     
-    function applyViewMode() {
-        const container = document.querySelector('.app-container');
-        if (isCompactView) {
-            container.classList.add('view-compact');
-            container.classList.remove('view-comfort');
-        } else {
-            container.classList.add('view-comfort');
-            container.classList.remove('view-compact');
-        }
-    }
-    
-    function toggleCompactView() {
-        isCompactView = document.getElementById('compactViewToggle').checked;
-        applyViewMode();
-        renderTryoutTable();
-    }
-    
-    function showDebug(message) {
-        console.log("[DEBUG]", message);
-        let toast = document.createElement('div');
-        toast.className = 'debug-toast';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 1500);
-    }
-    
-    function getRatingIcon(rating) {
-        const icons = { Elite: '⭐', Premier: '🏅', Competitive: '⚡', Recreational: '🌿' };
-        return icons[rating] || '';
-    }
-    
-    function getRatingColor(rating) {
-        const colors = { Elite: '#d4af37', Premier: '#a0c4ff', Competitive: '#9bf6b4', Recreational: '#bdb2ff' };
-        return colors[rating] || '#ddd';
-    }
-    
-    function getStatusIcon(status) {
-        const icons = { Evaluate: '🔍', Offered: '📋', Committed: '✅', Declined: '❌', 'Not Offering': '🚫' };
-        return icons[status] || '';
-    }
-    
-    async function getData(path) {
-        if (useFirebase) { const s = await db.ref(path).once('value'); return s.val(); }
-        else return JSON.parse(localStorage.getItem(path) || 'null');
-    }
-    async function setData(path, value) {
-        if (useFirebase) await db.ref(path).set(value);
-        else localStorage.setItem(path, JSON.stringify(value));
-    }
-    async function deleteChild(parentPath, childId) {
-        if (useFirebase) await db.ref(`${parentPath}/${childId}`).set(null);
-        else { const e = JSON.parse(localStorage.getItem(parentPath) || '{}'); delete e[childId]; localStorage.setItem(parentPath, JSON.stringify(e)); }
-    }
-    
-    try {
-        if (firebaseConfig.databaseURL && !firebaseConfig.databaseURL.includes("your-project")) {
-            firebase.initializeApp(firebaseConfig); db = firebase.database(); useFirebase = true;
-            document.getElementById('storageBadge').innerHTML = '<i class="fas fa-cloud"></i> Cloud Sync';
-            document.getElementById('storageBadge').style.background = '#dcfce7';
-        } else throw new Error();
-    } catch(e) {
-        document.getElementById('storageBadge').innerHTML = '<i class="fas fa-database"></i> Local Storage';
-        document.getElementById('storageBadge').style.background = '#fed7aa';
-    }
-    
     function escapeHtml(str) { if (!str) return ''; return String(str).replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m])); }
+    function getRatingIcon(r) { const icons = { Elite:'⭐', Premier:'🏅', Competitive:'⚡', Recreational:'🌿' }; return icons[r] || ''; }
+    function getRatingColor(r) { const colors = { Elite:'#d4af37', Premier:'#a0c4ff', Competitive:'#9bf6b4', Recreational:'#bdb2ff' }; return colors[r] || '#ddd'; }
+    function getStatusIcon(s) { const icons = { Evaluate:'🔍', Offered:'📋', Committed:'✅', Declined:'❌', 'Not Offering':'🚫' }; return icons[s] || ''; }
+    
+    // Compact/Comfort View Toggle
+    function initViewToggle() {
+        const checkbox = document.getElementById('compactViewToggle');
+        const body = document.body;
+        const savedView = localStorage.getItem('viewMode');
+        if (savedView === 'compact') {
+            body.classList.remove('comfort-view');
+            body.classList.add('compact-view');
+            checkbox.checked = true;
+        } else {
+            body.classList.remove('compact-view');
+            body.classList.add('comfort-view');
+            checkbox.checked = false;
+        }
+        checkbox.addEventListener('change', function(e) {
+            if (this.checked) {
+                body.classList.remove('comfort-view');
+                body.classList.add('compact-view');
+                localStorage.setItem('viewMode', 'compact');
+            } else {
+                body.classList.remove('compact-view');
+                body.classList.add('comfort-view');
+                localStorage.setItem('viewMode', 'comfort');
+            }
+            renderCurrentView();
+        });
+    }
+    
+    // Database helpers
+    async function getData(path) { if (!db || !currentUser) return null; const s = await db.ref(path).once('value'); return s.val(); }
+    async function setData(path, val) { if (!db || !currentUser) return; await db.ref(path).set(val); }
+    async function deleteChild(path, id) { if (!db || !currentUser) return; await db.ref(`${path}/${id}`).set(null); }
     
     function showModal(title, html, onConfirm) {
         let d = document.createElement('div'); d.className = 'modal';
@@ -321,205 +329,299 @@
         return d;
     }
     
-    function openEventManager() {
-        let html = `<div style="margin-bottom: 20px;"><h3>Events</h3><div id="eventListContainer" style="max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 16px; margin-bottom: 16px;"></div>
-            <div style="display: flex; gap: 8px;"><button id="newEventManagerBtn" class="btn btn-sm" style="flex:1;">+ New</button><button id="editEventManagerBtn" class="btn btn-outline btn-sm" style="flex:1;">Edit</button><button id="deleteEventManagerBtn" class="btn btn-danger btn-sm" style="flex:1;">Delete</button></div></div>
-            <div><h3>Age Groups</h3><div id="ageGroupManagerContainer" style="margin-bottom: 12px;"></div><div style="display: flex; gap: 8px;"><input type="text" id="newAgeGroupName" placeholder="New age group" style="flex:2;"><button id="addAgeGroupManagerBtn" class="btn btn-sm" style="flex:1;">Add</button></div></div>`;
-        let modal = showModal("Event Manager", html, () => {});
+    // Event Manager Modal
+    async function openEventManager() {
+        let html = `<div><h3>Events</h3><div id="eventListContainer" style="max-height:200px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:16px; margin-bottom:16px;"></div>
+            <div style="display:flex; gap:8px;"><button id="newEventBtn" class="btn btn-sm" style="flex:1;">+ New Event</button><button id="editEventBtn" class="btn btn-outline btn-sm" style="flex:1;">Edit</button><button id="deleteEventBtn" class="btn btn-danger btn-sm" style="flex:1;">Delete</button></div></div>
+            <div style="margin-top:20px;"><h3>Age Groups for Selected Event</h3><div id="ageGroupList" style="margin-bottom:12px;"></div><div style="display:flex; gap:8px;"><input type="text" id="newAgeGroupNameInput" placeholder="New age group (e.g., U16)" style="flex:2;"><button id="addAgeGroupBtn" class="btn btn-sm" style="flex:1;">Add Age Group</button></div></div>`;
         
-        function refreshEventList() {
-            getData('tryoutEvents').then(events => {
-                events = events || {};
-                const container = document.getElementById('eventListContainer');
-                container.innerHTML = '';
-                for (let id in events) {
-                    let div = document.createElement('div');
-                    div.style.cssText = 'padding: 10px; border-bottom: 1px solid #e2e8f0; cursor: pointer; display: flex; justify-content: space-between; align-items: center;';
-                    if (currentEventId === id) div.style.background = '#e0f2fe';
-                    div.innerHTML = `<span><strong>${escapeHtml(events[id].name)}</strong><br><small>${(events[id].ageGroups || []).join(', ')}</small></span>
-                                    <button class="select-event-btn" data-id="${id}" style="background:#2c7da0; color:white; border:none; padding:4px 12px; border-radius:20px;">Select</button>`;
-                    container.appendChild(div);
-                }
-                document.querySelectorAll('.select-event-btn').forEach(btn => btn.onclick = () => { currentEventId = btn.dataset.id; refreshEventList(); refreshAgeGroupManager(); });
+        showModal("Event Manager", html, () => {});
+        
+        async function refreshEvents() {
+            const events = await getData('tryoutEvents') || {};
+            const container = document.getElementById('eventListContainer');
+            container.innerHTML = '';
+            for (let id in events) {
+                let div = document.createElement('div');
+                div.style.cssText = 'padding:10px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;';
+                if (currentEventId === id) div.style.background = '#e0f2fe';
+                div.innerHTML = `<span><strong>${escapeHtml(events[id].name)}</strong><br><small>${(events[id].ageGroups || []).join(', ')}</small></span>
+                                <button class="select-event" data-id="${id}" style="background:#2c7da0; color:white; border:none; padding:4px 12px; border-radius:20px; cursor:pointer;">Select</button>`;
+                container.appendChild(div);
+            }
+            document.querySelectorAll('.select-event').forEach(btn => {
+                btn.onclick = () => { currentEventId = btn.dataset.id; refreshEvents(); refreshAgeGroups(); loadEvents(); };
             });
         }
         
-        function refreshAgeGroupManager() {
-            if (!currentEventId) { document.getElementById('ageGroupManagerContainer').innerHTML = '<p style="color:gray;">Select an event first</p>'; return; }
-            getData('tryoutEvents').then(events => {
-                let ageGroups = events[currentEventId]?.ageGroups || [];
-                document.getElementById('ageGroupManagerContainer').innerHTML = '<div class="age-group-list">' + ageGroups.map(ag => `<div style="background:#e2e8f0; padding:6px 12px; border-radius:30px; display:inline-flex; margin:4px;">${escapeHtml(ag)} <button class="remove-ag-btn" data-ag="${escapeHtml(ag)}" style="background:none; border:none; color:#c1292e; cursor:pointer;">✖</button></div>`).join('') + '</div>';
-                document.querySelectorAll('.remove-ag-btn').forEach(btn => btn.onclick = async () => {
+        async function refreshAgeGroups() {
+            if (!currentEventId) { 
+                document.getElementById('ageGroupList').innerHTML = '<p style="color:gray;">Select an event first</p>'; 
+                return; 
+            }
+            const events = await getData('tryoutEvents') || {};
+            const ageGroups = events[currentEventId]?.ageGroups || [];
+            document.getElementById('ageGroupList').innerHTML = ageGroups.map(ag => `<span style="background:#e2e8f0; padding:6px 12px; border-radius:30px; display:inline-flex; margin:4px;">${escapeHtml(ag)} <button class="remove-ag" data-ag="${escapeHtml(ag)}" style="background:none; border:none; color:#c1292e; cursor:pointer;">✖</button></span>`).join('');
+            
+            document.querySelectorAll('.remove-ag').forEach(btn => {
+                btn.onclick = async () => {
                     let ag = btn.dataset.ag;
-                    let events = await getData('tryoutEvents') || {};
-                    if (events[currentEventId]) {
-                        events[currentEventId].ageGroups = (events[currentEventId].ageGroups || []).filter(a => a !== ag);
-                        await setData('tryoutEvents', events);
-                        refreshAgeGroupManager();
-                        loadEvents();
+                    if (confirm(`Remove age group "${ag}"? Players will lose this assignment.`)) {
+                        let events = await getData('tryoutEvents') || {};
+                        if (events[currentEventId]) {
+                            const players = await getData(`players_${currentEventId}`) || {};
+                            for (let pid in players) {
+                                if (players[pid].ageGroup === ag) {
+                                    players[pid].ageGroup = null;
+                                }
+                            }
+                            await setData(`players_${currentEventId}`, players);
+                            events[currentEventId].ageGroups = (events[currentEventId].ageGroups || []).filter(a => a !== ag);
+                            await setData('tryoutEvents', events);
+                            refreshAgeGroups();
+                            loadEvents();
+                        }
                     }
-                });
+                };
             });
         }
         
-        document.getElementById('newEventManagerBtn').onclick = () => { let name = prompt("Event name:"); if(name){ getData('tryoutEvents').then(async(events)=>{ events[Date.now()]={name,ageGroups:[]}; await setData('tryoutEvents',events); refreshEventList(); }); } };
-        document.getElementById('editEventManagerBtn').onclick = () => { if(!currentEventId) return alert("Select event"); let name=prompt("New name:"); if(name){ getData('tryoutEvents').then(async(events)=>{ events[currentEventId].name=name; await setData('tryoutEvents',events); refreshEventList(); loadEvents(); }); } };
-        document.getElementById('deleteEventManagerBtn').onclick = () => { if(!currentEventId) return; if(confirm("Delete event?")){ deleteChild('players',`players_${currentEventId}`); getData('tryoutEvents').then(async(events)=>{ delete events[currentEventId]; await setData('tryoutEvents',events); currentEventId=null; refreshEventList(); loadEvents(); }); } };
-        document.getElementById('addAgeGroupManagerBtn').onclick = async () => { if(!currentEventId) return alert("Select event"); let newAg=document.getElementById('newAgeGroupName').value.trim(); if(!newAg) return; let events=await getData('tryoutEvents')||{}; if(events[currentEventId] && !events[currentEventId].ageGroups.includes(newAg)){ events[currentEventId].ageGroups.push(newAg); await setData('tryoutEvents',events); refreshAgeGroupManager(); loadEvents(); document.getElementById('newAgeGroupName').value=''; } };
-        refreshEventList();
-        refreshAgeGroupManager();
+        document.getElementById('newEventBtn').onclick = async () => {
+            let name = prompt("Event name:");
+            if (name) {
+                let events = await getData('tryoutEvents') || {};
+                events[Date.now()] = { name, ageGroups: [] };
+                await setData('tryoutEvents', events);
+                refreshEvents();
+            }
+        };
+        document.getElementById('editEventBtn').onclick = async () => {
+            if (!currentEventId) { alert("Select an event first"); return; }
+            let events = await getData('tryoutEvents') || {};
+            let newName = prompt("New name:", events[currentEventId]?.name);
+            if (newName && events[currentEventId]) {
+                events[currentEventId].name = newName;
+                await setData('tryoutEvents', events);
+                refreshEvents();
+                loadEvents();
+            }
+        };
+        document.getElementById('deleteEventBtn').onclick = async () => {
+            if (!currentEventId) { alert("Select an event first"); return; }
+            if (confirm("Delete this event and ALL its players? This cannot be undone!")) {
+                await deleteChild('players', `players_${currentEventId}`);
+                let events = await getData('tryoutEvents') || {};
+                delete events[currentEventId];
+                await setData('tryoutEvents', events);
+                currentEventId = null;
+                refreshEvents();
+                loadEvents();
+            }
+        };
+        document.getElementById('addAgeGroupBtn').onclick = async () => {
+            if (!currentEventId) { alert("Select an event first"); return; }
+            let newAg = document.getElementById('newAgeGroupNameInput').value.trim();
+            if (!newAg) { alert("Please enter an age group name"); return; }
+            let events = await getData('tryoutEvents') || {};
+            if (events[currentEventId]) {
+                let ageGroups = events[currentEventId].ageGroups || [];
+                if (ageGroups.includes(newAg)) {
+                    alert("Age group already exists");
+                    return;
+                }
+                ageGroups.push(newAg);
+                events[currentEventId].ageGroups = ageGroups;
+                await setData('tryoutEvents', events);
+                document.getElementById('newAgeGroupNameInput').value = '';
+                refreshAgeGroups();
+                loadEvents();
+            }
+        };
+        
+        refreshEvents();
+        refreshAgeGroups();
     }
     
-    async function updateAndRefresh(playerId, field, value) {
-        showDebug(`Updating ${field} to "${value}"`);
+    async function updatePlayerField(id, field, value) {
         if (!currentEventId) return;
         
-        const players = await getData(`players_${currentEventId}`) || {};
-        if (players[playerId]) {
-            players[playerId][field] = value;
-            await setData(`players_${currentEventId}`, players);
-        } else {
-            return;
+        try {
+            const players = await getData(`players_${currentEventId}`) || {};
+            if (players[id]) {
+                players[id][field] = value;
+                await setData(`players_${currentEventId}`, players);
+                console.log(`Updated ${field} to "${value}" for player ${id}`);
+            }
+            
+            const idx = allPlayers.findIndex(p => p.id === id);
+            if (idx !== -1) {
+                allPlayers[idx][field] = value;
+            }
+            
+            if (currentMode === "tryout") {
+                renderTryoutTable();
+            } else {
+                renderRosterBuilder();
+            }
+        } catch (error) {
+            console.error("Error updating player field:", error);
         }
-        
-        const freshData = await getData(`players_${currentEventId}`) || {};
-        const filteredPlayers = Object.values(freshData).filter(p => p.ageGroup === currentAgeGroup);
-        allPlayers = filteredPlayers.map(p => ({...p, jersey: p.jersey||'', field: p.field||'', rating: p.rating||''}));
-        
-        if (currentMode === "tryout") {
-            renderTryoutTable();
-        } else {
-            renderRosterBuilder();
-        }
-    }
-    
-    function handleFieldChange(event) {
-        const target = event.target;
-        const playerId = target.getAttribute('data-id');
-        const field = target.getAttribute('data-field');
-        let value = target.value;
-        
-        if (value === 'Select Rating' || value === '') {
-            value = '';
-        }
-        
-        if (playerId && field) {
-            updateAndRefresh(playerId, field, value);
-        }
-    }
-    
-    async function forceRefresh() {
-        showDebug("Force refreshing data...");
-        if (!currentEventId || !currentAgeGroup) {
-            showDebug("No event or age group selected");
-            return;
-        }
-        const freshData = await getData(`players_${currentEventId}`) || {};
-        const filteredPlayers = Object.values(freshData).filter(p => p.ageGroup === currentAgeGroup);
-        allPlayers = filteredPlayers.map(p => ({...p, jersey: p.jersey||'', field: p.field||'', rating: p.rating||''}));
-        renderTryoutTable();
-    }
-    
-    async function addWalkup() {
-        if (!currentEventId) return alert("Select an event first");
-        if (!currentAgeGroup) return alert("Select an age group first");
-        let html = `<div class="form-row"><div class="form-group"><label>First Name *</label><input id="fn"></div><div class="form-group"><label>Last Name *</label><input id="ln"></div></div>
-            <div class="form-row"><div class="form-group"><label>DOB</label><input id="dob"></div><div class="form-group"><label>Phone</label><input id="phone"></div></div>
-            <div class="form-group"><label>Parent Name</label><input id="parent"></div>
-            <div class="form-group"><label>Email</label><input id="email"></div>
-            <div class="form-group"><label>Club History</label><input id="club"></div>
-            <div class="form-group"><label>Position</label><input id="pos"></div>
-            <div class="form-row"><div class="form-group"><label>Jersey Number</label><input id="jersey" placeholder="Tryout jersey #"></div>
-            <div class="form-group"><label>Field</label><input id="field" placeholder="Field #"></div></div>
-            <div class="form-group"><label>Medical Conditions</label><textarea id="med" rows="2"></textarea></div>
-            <div class="form-row"><div class="form-group"><label>Rating</label><select id="rating"><option value="">Select a Rating</option>${RATING_OPTIONS.map(r=>`<option>${r}</option>`).join('')}</select></div>
-            <div class="form-group"><label>Status</label><select id="status">${STATUS_OPTIONS.map(s=>`<option>${s}</option>`).join('')}</select></div></div>
-            <div class="form-group"><label>Team</label><select id="team"><option value=""></option>${TEAM_OPTIONS.map(t=>`<option>${t}</option>`).join('')}</select></div>
-            <div class="form-group"><label>Notes</label><textarea id="notes" rows="2"></textarea></div>`;
-        showModal("Add Walk-up Player", html, async () => {
-            let fn=document.getElementById('fn').value.trim(), ln=document.getElementById('ln').value.trim();
-            if(!fn||!ln) return alert("First and last name required");
-            let rating = document.getElementById('rating').value;
-            let newPlayer={ id:Date.now().toString(), firstName:fn, lastName:ln, dob:document.getElementById('dob').value||'', phoneNumber:document.getElementById('phone').value||'', parentName:document.getElementById('parent').value||'', email:document.getElementById('email').value||'', clubHistory:document.getElementById('club').value||'', position:document.getElementById('pos').value||'', field:document.getElementById('field').value||'', medicalConditions:document.getElementById('med').value||'', rating:rating || '', status:document.getElementById('status').value, assignedTeam:document.getElementById('team').value||'', jersey:document.getElementById('jersey').value||'', notes:document.getElementById('notes').value||'', ageGroup:currentAgeGroup };
-            const players=await getData(`players_${currentEventId}`)||{};
-            players[newPlayer.id]=newPlayer;
-            await setData(`players_${currentEventId}`,players);
-            await loadPlayersForEvent();
-        });
-    }
-    
-    async function importSpreadsheet(file) {
-        if (!currentEventId) return alert("Select event");
-        if (!currentAgeGroup) return alert("Select age group");
-        let data = await file.arrayBuffer();
-        let wb = XLSX.read(data);
-        let rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "" });
-        if(rows.length<2) return;
-        let h=rows[0], idx={first:-1,last:-1,dob:-1,phone:-1,parent:-1,email:-1,club:-1,medical:-1,field:-1};
-        h.forEach((v,i)=>{ let l=String(v).toUpperCase(); if(l.includes('FIRST')) idx.first=i; if(l.includes('LAST')) idx.last=i; if(l.includes('DOB')) idx.dob=i; if(l.includes('PHONE')) idx.phone=i; if(l.includes('PARENT')) idx.parent=i; if(l.includes('EMAIL')) idx.email=i; if(l.includes('CLUB')) idx.club=i; if(l.includes('MEDICAL')) idx.medical=i; if(l.includes('FIELD')) idx.field=i; });
-        let players=await getData(`players_${currentEventId}`)||{}, newCount=0, dupCount=0;
-        for(let i=1;i<rows.length;i++){
-            let r=rows[i], fn=r[idx.first]||'', ln=r[idx.last]||'', dob=r[idx.dob]||'', phone=r[idx.phone]?String(r[idx.phone]):'';
-            let dup=Object.values(players).some(p=>p.firstName===fn && p.lastName===ln && p.dob===dob && p.phoneNumber===phone && p.ageGroup===currentAgeGroup);
-            if(dup||(!fn&&!ln)){ dupCount++; continue; }
-            let newId = (Date.now() + newCount).toString();
-            players[newId] = { 
-                id: newId, 
-                firstName: fn, 
-                lastName: ln, 
-                dob: dob, 
-                phoneNumber: phone, 
-                parentName: r[idx.parent] || '', 
-                email: r[idx.email] || '', 
-                clubHistory: r[idx.club] || '', 
-                medicalConditions: r[idx.medical] || '', 
-                field: r[idx.field] || '', 
-                rating: '', 
-                status: 'Evaluate', 
-                assignedTeam: '', 
-                notes: '', 
-                position: '', 
-                jersey: '', 
-                ageGroup: currentAgeGroup 
-            };
-            newCount++;
-        }
-        await setData(`players_${currentEventId}`, players);
-        alert(`Imported: ${newCount} added, ${dupCount} duplicates skipped`);
-        await loadPlayersForEvent();
     }
     
     async function loadEvents() {
         const events = await getData('tryoutEvents') || {};
         const eventSelect = document.getElementById('eventSelect');
         eventSelect.innerHTML = '<option value="">Select event</option>';
-        for(let id in events){ let opt=document.createElement('option'); opt.value=id; opt.textContent=events[id].name; eventSelect.appendChild(opt); }
-        if(currentEventId && events[currentEventId]) eventSelect.value=currentEventId;
-        else if(eventSelect.options.length>1){ currentEventId=eventSelect.options[1].value; eventSelect.value=currentEventId; }
-        else{ currentEventId=null; }
+        for (let id in events) {
+            let opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = events[id].name;
+            eventSelect.appendChild(opt);
+        }
+        if (currentEventId && events[currentEventId]) eventSelect.value = currentEventId;
+        else if (eventSelect.options.length > 1) {
+            currentEventId = eventSelect.options[1].value;
+            eventSelect.value = currentEventId;
+        } else { currentEventId = null; }
+        
         currentAgeGroups = events[currentEventId]?.ageGroups || [];
-        const ageGroupSelect=document.getElementById('ageGroupSelect');
-        ageGroupSelect.innerHTML='<option value="">Select age group</option>';
-        currentAgeGroups.forEach(ag=>{ let opt=document.createElement('option'); opt.value=ag; opt.textContent=ag; ageGroupSelect.appendChild(opt); });
-        if(currentAgeGroup && currentAgeGroups.includes(currentAgeGroup)) ageGroupSelect.value=currentAgeGroup;
-        else if(currentAgeGroups.length>0){ currentAgeGroup=currentAgeGroups[0]; ageGroupSelect.value=currentAgeGroup; }
-        else currentAgeGroup=null;
+        const ageSelect = document.getElementById('ageGroupSelect');
+        ageSelect.innerHTML = '<option value="">Select age group</option>';
+        currentAgeGroups.forEach(ag => { let opt = document.createElement('option'); opt.value = ag; opt.textContent = ag; ageSelect.appendChild(opt); });
+        if (currentAgeGroup && currentAgeGroups.includes(currentAgeGroup)) ageSelect.value = currentAgeGroup;
+        else if (currentAgeGroups.length > 0) { currentAgeGroup = currentAgeGroups[0]; ageSelect.value = currentAgeGroup; }
+        else currentAgeGroup = null;
+        
         await loadPlayersForEvent();
     }
     
     async function loadPlayersForEvent() {
-        if(!currentEventId || !currentAgeGroup){ allPlayers=[]; renderCurrentView(); return; }
-        const data=await getData(`players_${currentEventId}`)||{};
-        allPlayers=Object.values(data).filter(p=>p.ageGroup===currentAgeGroup).map(p=>({...p, jersey:p.jersey||'', field:p.field||'', rating:p.rating||''}));
+        if (!currentEventId || !currentAgeGroup) { allPlayers = []; renderCurrentView(); return; }
+        const data = await getData(`players_${currentEventId}`) || {};
+        allPlayers = Object.values(data).filter(p => p.ageGroup === currentAgeGroup).map(p => ({...p, jersey: p.jersey||'', field: p.field||'', rating: p.rating||''}));
         renderCurrentView();
     }
     
-    function renderCurrentView() { 
-        if(currentMode==="tryout") renderTryoutTable(); 
-        else renderRosterBuilder(); 
+    function renderCurrentView() {
+        if (currentMode === "tryout") renderTryoutTable();
+        else renderRosterBuilder();
     }
     
-    function updateSortIndicators() {
+    window.openPlayerDetail = async function(id) {
+        const p = allPlayers.find(p => p.id === id);
+        if (!p) return;
+        
+        let html = `<div class="form-row"><div class="form-group"><label>First Name</label><input id="efn" value="${escapeHtml(p.firstName)}"></div>
+                    <div class="form-group"><label>Last Name</label><input id="eln" value="${escapeHtml(p.lastName)}"></div></div>
+                    <div class="form-row"><div class="form-group"><label>DOB</label><input id="edob" value="${escapeHtml(p.dob||'')}"></div>
+                    <div class="form-group"><label>Phone</label><input id="ephone" value="${escapeHtml(p.phoneNumber||'')}"></div></div>
+                    <div class="form-group"><label>Parent Name</label><input id="eparent" value="${escapeHtml(p.parentName||'')}"></div>
+                    <div class="form-group"><label>Email</label><input id="eemail" value="${escapeHtml(p.email||'')}"></div>
+                    <div class="form-group"><label>Club History</label><input id="eclub" value="${escapeHtml(p.clubHistory||'')}"></div>
+                    <div class="form-group"><label>Position</label><input id="epos" value="${escapeHtml(p.position||'')}"></div>
+                    <div class="form-row"><div class="form-group"><label>Jersey</label><input id="ejersey" value="${escapeHtml(p.jersey||'')}"></div>
+                    <div class="form-group"><label>Field</label><input id="efield" value="${escapeHtml(p.field||'')}"></div></div>
+                    <div class="form-group"><label>Medical</label><textarea id="emed" rows="2">${escapeHtml(p.medicalConditions||'')}</textarea></div>
+                    <div class="form-row"><div class="form-group"><label>Rating</label><select id="erating"><option value="">Select Rating</option>${RATING_OPTIONS.map(r => `<option ${p.rating===r?'selected':''}>${r}</option>`).join('')}</select></div>
+                    <div class="form-group"><label>Status</label><select id="estatus">${STATUS_OPTIONS.map(s => `<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></div></div>
+                    <div class="form-group"><label>Team</label><select id="eteam"><option value=""></option>${TEAM_OPTIONS.map(t => `<option ${p.assignedTeam===t?'selected':''}>${t}</option>`).join('')}</select></div>
+                    <div class="form-group"><label>Notes</label><textarea id="enotes" rows="2">${escapeHtml(p.notes||'')}</textarea></div>
+                    <hr><button type="button" id="delPlayerBtn" class="btn btn-danger" style="width:100%">Delete Player</button>`;
+        
+        showModal("Edit Player", html, async () => {
+            const players = await getData(`players_${currentEventId}`) || {};
+            if (players[id]) {
+                players[id].firstName = document.getElementById('efn').value;
+                players[id].lastName = document.getElementById('eln').value;
+                players[id].dob = document.getElementById('edob').value;
+                players[id].phoneNumber = document.getElementById('ephone').value;
+                players[id].parentName = document.getElementById('eparent').value;
+                players[id].email = document.getElementById('eemail').value;
+                players[id].clubHistory = document.getElementById('eclub').value;
+                players[id].position = document.getElementById('epos').value;
+                players[id].jersey = document.getElementById('ejersey').value;
+                players[id].field = document.getElementById('efield').value;
+                players[id].medicalConditions = document.getElementById('emed').value;
+                players[id].rating = document.getElementById('erating').value;
+                players[id].status = document.getElementById('estatus').value;
+                players[id].assignedTeam = document.getElementById('eteam').value;
+                players[id].notes = document.getElementById('enotes').value;
+                await setData(`players_${currentEventId}`, players);
+                await loadPlayersForEvent();
+            }
+        });
+        
+        setTimeout(() => {
+            const delBtn = document.getElementById('delPlayerBtn');
+            if (delBtn) delBtn.onclick = async () => {
+                if (confirm(`Delete ${p.firstName} ${p.lastName}?`)) {
+                    await deleteChild(`players_${currentEventId}`, id);
+                    document.querySelector('.modal')?.remove();
+                    await loadPlayersForEvent();
+                }
+            };
+        }, 100);
+    };
+    
+    function handleInlineChange(e) {
+        const id = e.target.getAttribute('data-id');
+        const field = e.target.getAttribute('data-field');
+        let value = e.target.value;
+        
+        if (value === 'Select Rating') value = '';
+        if (id && field) {
+            updatePlayerField(id, field, value);
+        }
+    }
+    
+    function renderTryoutTable() {
+        let filtered = allPlayers.filter(p => {
+            if (currentFilters.status.length && !currentFilters.status.includes(p.status)) return false;
+            if (currentFilters.rating.length && !currentFilters.rating.includes(p.rating)) return false;
+            if (currentFilters.team.length && !currentFilters.team.includes(p.assignedTeam)) return false;
+            return true;
+        });
+        
+        filtered.sort((a, b) => {
+            let aVal = a[sortColumn] || '';
+            let bVal = b[sortColumn] || '';
+            if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+            if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+            if (sortColumn === 'jersey') {
+                aVal = parseInt(aVal) || 0;
+                bVal = parseInt(bVal) || 0;
+            }
+            if (aVal < bVal) return sortAsc ? -1 : 1;
+            if (aVal > bVal) return sortAsc ? 1 : -1;
+            return 0;
+        });
+        
+        const tbody = document.getElementById('tryoutTbody');
+        tbody.innerHTML = '';
+        
+        for (let p of filtered) {
+            const row = tbody.insertRow();
+            row.insertCell(0).innerHTML = `<input type="text" value="${escapeHtml(p.jersey)}" data-id="${p.id}" data-field="jersey" style="width:60px" class="inline-edit">`;
+            row.insertCell(1).innerHTML = `<input type="text" value="${escapeHtml(p.field)}" data-id="${p.id}" data-field="field" style="width:60px" class="inline-edit">`;
+            row.insertCell(2).innerHTML = `<a href="#" class="player-link" data-id="${p.id}">${escapeHtml(p.firstName)}</a>`;
+            row.insertCell(3).innerHTML = `<a href="#" class="player-link" data-id="${p.id}">${escapeHtml(p.lastName)}</a>`;
+            row.insertCell(4).innerHTML = `<input type="text" value="${escapeHtml(p.clubHistory)}" data-id="${p.id}" data-field="clubHistory" class="inline-edit" style="min-width:120px">`;
+            row.insertCell(5).innerHTML = `<select data-id="${p.id}" data-field="rating" class="rating-select" style="background:${getRatingColor(p.rating)}"><option value="">Select Rating</option>${RATING_OPTIONS.map(r => `<option ${p.rating===r?'selected':''} value="${r}">${getRatingIcon(r)} ${r}</option>`).join('')}</select>`;
+            row.insertCell(6).innerHTML = `<select data-id="${p.id}" data-field="assignedTeam" class="team-select" style="min-width:110px"><option value="">Select Team</option>${TEAM_OPTIONS.map(t => `<option ${p.assignedTeam===t?'selected':''} value="${t}">${t}</option>`).join('')}</select>`;
+            row.insertCell(7).innerHTML = `<select data-id="${p.id}" data-field="status" class="status-select">${STATUS_OPTIONS.map(s => `<option ${p.status===s?'selected':''} value="${s}">${getStatusIcon(s)} ${s}</option>`).join('')}</select>`;
+            row.insertCell(8).innerHTML = `<input type="text" value="${escapeHtml(p.notes)}" data-id="${p.id}" data-field="notes" class="inline-edit" style="min-width:120px">`;
+        }
+        
+        document.querySelectorAll('.inline-edit, .rating-select, .team-select, .status-select').forEach(el => {
+            el.removeEventListener('change', handleInlineChange);
+            el.addEventListener('change', handleInlineChange);
+        });
+        
+        document.querySelectorAll('.player-link').forEach(el => {
+            el.removeEventListener('click', playerLinkHandler);
+            el.addEventListener('click', playerLinkHandler);
+        });
+        
         document.querySelectorAll('th[data-sort]').forEach(th => {
             const indicator = th.querySelector('.sort-indicator');
             const col = th.dataset.sort;
@@ -531,219 +633,13 @@
         });
     }
     
-    window.openPlayerDetail = async function(playerId) {
-        const player = allPlayers.find(p => p.id === playerId);
-        if (!player) return;
-        
-        let html = `<div class="form-row"><div class="form-group"><label>First Name</label><input id="efn" value="${escapeHtml(player.firstName || '')}"></div>
-                    <div class="form-group"><label>Last Name</label><input id="eln" value="${escapeHtml(player.lastName || '')}"></div></div>
-                    <div class="form-row"><div class="form-group"><label>DOB</label><input id="edob" value="${escapeHtml(player.dob || '')}"></div>
-                    <div class="form-group"><label>Phone</label><input id="ephone" value="${escapeHtml(player.phoneNumber || '')}"></div></div>
-                    <div class="form-group"><label>Parent Name</label><input id="eparent" value="${escapeHtml(player.parentName || '')}"></div>
-                    <div class="form-group"><label>Email</label><input id="eemail" value="${escapeHtml(player.email || '')}"></div>
-                    <div class="form-group"><label>Club History</label><input id="eclub" value="${escapeHtml(player.clubHistory || '')}"></div>
-                    <div class="form-group"><label>Position</label><input id="epos" value="${escapeHtml(player.position || '')}"></div>
-                    <div class="form-row"><div class="form-group"><label>Jersey Number</label><input id="ejersey" value="${escapeHtml(player.jersey || '')}"></div>
-                    <div class="form-group"><label>Field</label><input id="efield" value="${escapeHtml(player.field || '')}"></div></div>
-                    <div class="form-group"><label>Medical Conditions</label><textarea id="emed" rows="2">${escapeHtml(player.medicalConditions || '')}</textarea></div>
-                    <div class="form-row"><div class="form-group"><label>Rating</label><select id="erating"><option value="">Select Rating</option>${RATING_OPTIONS.map(r => `<option ${player.rating === r ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
-                    <div class="form-group"><label>Status</label><select id="estatus">${STATUS_OPTIONS.map(s => `<option ${player.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div></div>
-                    <div class="form-group"><label>Team</label><select id="eteam"><option value=""></option>${TEAM_OPTIONS.map(t => `<option ${player.assignedTeam === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
-                    <div class="form-group"><label>Notes</label><textarea id="enotes" rows="2">${escapeHtml(player.notes || '')}</textarea></div>
-                    <hr><button type="button" id="delPlayerBtn" class="btn btn-danger" style="width:100%">🗑️ Delete Player</button>`;
-        
-        showModal("Edit Player", html, async (modal) => {
-            const players = await getData(`players_${currentEventId}`) || {};
-            if (players[playerId]) {
-                players[playerId].firstName = document.getElementById('efn').value;
-                players[playerId].lastName = document.getElementById('eln').value;
-                players[playerId].dob = document.getElementById('edob').value;
-                players[playerId].phoneNumber = document.getElementById('ephone').value;
-                players[playerId].parentName = document.getElementById('eparent').value;
-                players[playerId].email = document.getElementById('eemail').value;
-                players[playerId].clubHistory = document.getElementById('eclub').value;
-                players[playerId].position = document.getElementById('epos').value;
-                players[playerId].jersey = document.getElementById('ejersey').value;
-                players[playerId].field = document.getElementById('efield').value;
-                players[playerId].medicalConditions = document.getElementById('emed').value;
-                players[playerId].rating = document.getElementById('erating').value;
-                players[playerId].status = document.getElementById('estatus').value;
-                players[playerId].assignedTeam = document.getElementById('eteam').value;
-                players[playerId].notes = document.getElementById('enotes').value;
-                await setData(`players_${currentEventId}`, players);
-                await loadPlayersForEvent();
-            }
-        });
-        
-        setTimeout(() => {
-            const delBtn = document.getElementById('delPlayerBtn');
-            if (delBtn) {
-                delBtn.onclick = async () => {
-                    if (confirm(`Delete ${player.firstName} ${player.lastName} permanently?`)) {
-                        await deleteChild(`players_${currentEventId}`, playerId);
-                        const modal = document.querySelector('.modal');
-                        if (modal) modal.remove();
-                        await loadPlayersForEvent();
-                    }
-                };
-            }
-        }, 100);
-    };
-    
-    function renderTryoutTable() {
-        let filtered = allPlayers.filter(p => {
-            if(currentFilters.status.length && !currentFilters.status.includes(p.status)) return false;
-            if(currentFilters.rating.length && !currentFilters.rating.includes(p.rating)) return false;
-            if(currentFilters.team.length && !currentFilters.team.includes(p.assignedTeam)) return false;
-            return true;
-        });
-        
-        filtered.sort((a,b) => { 
-            let av = a[sortColumn] || '', bv = b[sortColumn] || ''; 
-            if(sortAsc) return av > bv ? 1 : -1;
-            else return av < bv ? 1 : -1;
-        });
-        
-        const tbody = document.getElementById('tryoutTbody');
-        tbody.innerHTML = '';
-        
-        for (let p of filtered) {
-            const row = tbody.insertRow();
-            
-            const jerseyCell = row.insertCell(0);
-            const jerseyInput = document.createElement('input');
-            jerseyInput.type = 'text';
-            jerseyInput.value = p.jersey || '';
-            jerseyInput.style.width = isCompactView ? '55px' : '70px';
-            jerseyInput.placeholder = '#';
-            jerseyInput.className = 'field-input';
-            jerseyInput.setAttribute('data-id', p.id);
-            jerseyInput.setAttribute('data-field', 'jersey');
-            jerseyInput.addEventListener('change', handleFieldChange);
-            jerseyCell.appendChild(jerseyInput);
-            
-            const fieldCell = row.insertCell(1);
-            const fieldInput = document.createElement('input');
-            fieldInput.type = 'text';
-            fieldInput.value = p.field || '';
-            fieldInput.style.width = isCompactView ? '55px' : '70px';
-            fieldInput.placeholder = 'F#';
-            fieldInput.className = 'field-input';
-            fieldInput.setAttribute('data-id', p.id);
-            fieldInput.setAttribute('data-field', 'field');
-            fieldInput.addEventListener('change', handleFieldChange);
-            fieldCell.appendChild(fieldInput);
-            
-            const firstNameCell = row.insertCell(2);
-            const firstNameLink = document.createElement('a');
-            firstNameLink.href = '#';
-            firstNameLink.className = 'player-link';
-            firstNameLink.textContent = p.firstName || '';
-            firstNameLink.onclick = (e) => {
-                e.preventDefault();
-                window.openPlayerDetail(p.id);
-            };
-            firstNameCell.appendChild(firstNameLink);
-            
-            const lastNameCell = row.insertCell(3);
-            const lastNameLink = document.createElement('a');
-            lastNameLink.href = '#';
-            lastNameLink.className = 'player-link';
-            lastNameLink.textContent = p.lastName || '';
-            lastNameLink.onclick = (e) => {
-                e.preventDefault();
-                window.openPlayerDetail(p.id);
-            };
-            lastNameCell.appendChild(lastNameLink);
-            
-            const clubCell = row.insertCell(4);
-            const clubInput = document.createElement('input');
-            clubInput.type = 'text';
-            clubInput.value = p.clubHistory || '';
-            clubInput.style.minWidth = isCompactView ? '120px' : '150px';
-            clubInput.className = 'field-input';
-            clubInput.setAttribute('data-id', p.id);
-            clubInput.setAttribute('data-field', 'clubHistory');
-            clubInput.addEventListener('change', handleFieldChange);
-            clubCell.appendChild(clubInput);
-            
-            const ratingCell = row.insertCell(5);
-            const ratingSelect = document.createElement('select');
-            ratingSelect.style.background = getRatingColor(p.rating);
-            ratingSelect.className = 'field-select';
-            ratingSelect.setAttribute('data-id', p.id);
-            ratingSelect.setAttribute('data-field', 'rating');
-            
-            const defaultOption = document.createElement('option');
-            defaultOption.value = '';
-            defaultOption.textContent = 'Select Rating';
-            ratingSelect.appendChild(defaultOption);
-            
-            for (let r of RATING_OPTIONS) {
-                const option = document.createElement('option');
-                option.value = r;
-                option.textContent = `${getRatingIcon(r)} ${r}`;
-                if (p.rating === r) option.selected = true;
-                ratingSelect.appendChild(option);
-            }
-            ratingSelect.addEventListener('change', handleFieldChange);
-            ratingCell.appendChild(ratingSelect);
-            
-            const teamCell = row.insertCell(6);
-            const teamSelect = document.createElement('select');
-            teamSelect.style.minWidth = isCompactView ? '110px' : '130px';
-            teamSelect.className = 'field-select';
-            teamSelect.setAttribute('data-id', p.id);
-            teamSelect.setAttribute('data-field', 'assignedTeam');
-            
-            const emptyTeamOption = document.createElement('option');
-            emptyTeamOption.value = '';
-            emptyTeamOption.textContent = 'Select Team';
-            teamSelect.appendChild(emptyTeamOption);
-            
-            for (let t of TEAM_OPTIONS) {
-                const option = document.createElement('option');
-                option.value = t;
-                option.textContent = t;
-                if (p.assignedTeam === t) option.selected = true;
-                teamSelect.appendChild(option);
-            }
-            teamSelect.addEventListener('change', handleFieldChange);
-            teamCell.appendChild(teamSelect);
-            
-            const statusCell = row.insertCell(7);
-            const statusSelect = document.createElement('select');
-            statusSelect.className = 'field-select';
-            statusSelect.setAttribute('data-id', p.id);
-            statusSelect.setAttribute('data-field', 'status');
-            
-            for (let s of STATUS_OPTIONS) {
-                const option = document.createElement('option');
-                option.value = s;
-                option.textContent = `${getStatusIcon(s)} ${s}`;
-                if (p.status === s) option.selected = true;
-                statusSelect.appendChild(option);
-            }
-            statusSelect.addEventListener('change', handleFieldChange);
-            statusCell.appendChild(statusSelect);
-            
-            const notesCell = row.insertCell(8);
-            const notesInput = document.createElement('input');
-            notesInput.type = 'text';
-            notesInput.value = p.notes || '';
-            notesInput.style.minWidth = isCompactView ? '120px' : '150px';
-            notesInput.className = 'field-input';
-            notesInput.setAttribute('data-id', p.id);
-            notesInput.setAttribute('data-field', 'notes');
-            notesInput.addEventListener('change', handleFieldChange);
-            notesCell.appendChild(notesInput);
-        }
-        
-        updateSortIndicators();
+    function playerLinkHandler(e) {
+        e.preventDefault();
+        window.openPlayerDetail(e.currentTarget.getAttribute('data-id'));
     }
     
     function renderRosterBuilder() {
-        if(!currentAgeGroup){ 
+        if (!currentAgeGroup) { 
             document.getElementById('rosterGrid').innerHTML = '<div style="padding:40px;text-align:center;background:white;border-radius:28px;">Select an age group above</div>'; 
             return; 
         }
@@ -751,40 +647,32 @@
         const container = document.getElementById('rosterGrid');
         container.innerHTML = TEAM_OPTIONS.map(team => {
             let teamClass = team === 'ECNL' ? 'team-ecnl' : team === 'ECNL-RL' ? 'team-ecnl-rl' : team === 'Gold' ? 'team-gold' : 'team-not-offering';
-            return `<div class="team-col ${teamClass}" data-team="${team}"><h3>${team === 'ECNL' ? '⚽' : team === 'ECNL-RL' ? '🌟' : team === 'Gold' ? '🏆' : '❌'} ${team}</h3><div class="roster-dropzone" data-team="${team}"></div></div>`;
+            return `<div class="team-col ${teamClass}" data-team="${team}"><h3>${team}</h3><div class="roster-dropzone" data-team="${team}"></div></div>`;
         }).join('');
         
-        const dropZones = document.querySelectorAll('.roster-dropzone');
-        dropZones.forEach(zone => {
-            let team = zone.getAttribute('data-team');
+        document.querySelectorAll('.roster-dropzone').forEach(zone => {
+            let team = zone.dataset.team;
             let playersForTeam = allPlayers.filter(p => p.assignedTeam === team);
-            zone.innerHTML = '';
-            if(playersForTeam.length === 0) {
-                zone.innerHTML = '<div class="roster-empty">Drop players here</div>';
-            }
+            zone.innerHTML = playersForTeam.length === 0 ? '<div class="roster-empty">Drop players here</div>' : '';
             playersForTeam.forEach(p => {
                 let card = document.createElement('div');
-                card.style.borderLeftColor = getRatingColor(p.rating);
                 card.className = 'player-card';
+                card.style.borderLeftColor = getRatingColor(p.rating);
                 card.setAttribute('data-playerid', p.id);
-                card.innerHTML = `<div><div class="player-info">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}</div><div class="player-pos">${escapeHtml(p.position || 'Any')} ${p.jersey ? `#${escapeHtml(p.jersey)}` : ''} ${p.field ? `· F${escapeHtml(p.field)}` : ''}<br>${getRatingIcon(p.rating)} ${p.rating || 'No Rating'}</div></div><i class="fas fa-grip-vertical"></i>`;
-                card.onclick = (e) => { if(!e.target.closest('.fa-grip-vertical')) window.openPlayerDetail(p.id); };
+                card.innerHTML = `<div style="flex:1"><strong>${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}</strong><br><small>${p.position||'Any'} ${p.jersey ? `#${p.jersey}` : ''} | ${getRatingIcon(p.rating)} ${p.rating || 'No Rating'}</small></div><i class="fas fa-grip-vertical"></i>`;
+                card.onclick = (e) => { if (!e.target.closest('.fa-grip-vertical')) window.openPlayerDetail(p.id); };
                 zone.appendChild(card);
             });
         });
         
-        if(sortableInstances.length) sortableInstances.forEach(s => s.destroy());
+        if (sortableInstances.length) sortableInstances.forEach(s => s.destroy());
         sortableInstances = [];
         document.querySelectorAll('.roster-dropzone').forEach(zone => {
-            let s = new Sortable(zone, { 
-                group: { name: 'roster', pull: true, revertClone: false }, 
-                animation: 200, 
-                onEnd: async function(evt) { 
-                    let playerId = evt.item.getAttribute('data-playerid'); 
-                    let newTeam = evt.to.getAttribute('data-team'); 
-                    if(playerId && newTeam) await updateAndRefresh(playerId, 'assignedTeam', newTeam); 
-                } 
-            });
+            let s = new Sortable(zone, { group: 'roster', animation: 200, onEnd: async (evt) => {
+                let playerId = evt.item.dataset.playerid;
+                let newTeam = evt.to.dataset.team;
+                if (playerId && newTeam) await updatePlayerField(playerId, 'assignedTeam', newTeam);
+            }});
             sortableInstances.push(s);
         });
         
@@ -792,126 +680,395 @@
     }
     
     function renderUnassignedPool() {
-        let unassignedPlayers = allPlayers.filter(p => !p.assignedTeam || p.assignedTeam === '');
+        let unassigned = allPlayers.filter(p => !p.assignedTeam || p.assignedTeam === '');
         let ratingFilter = document.getElementById('unassignedRatingFilter')?.value || 'all';
         let statusFilter = document.getElementById('unassignedStatusFilter')?.value || 'all';
         let searchFilter = document.getElementById('unassignedSearchFilter')?.value.toLowerCase() || '';
         
-        let filtered = unassignedPlayers.filter(p => {
-            if(ratingFilter !== 'all' && p.rating !== ratingFilter) return false;
-            if(statusFilter !== 'all' && p.status !== statusFilter) return false;
-            if(searchFilter && !`${p.firstName} ${p.lastName}`.toLowerCase().includes(searchFilter)) return false;
+        let filtered = unassigned.filter(p => {
+            if (ratingFilter !== 'all' && p.rating !== ratingFilter) return false;
+            if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+            if (searchFilter && !`${p.firstName} ${p.lastName}`.toLowerCase().includes(searchFilter)) return false;
             return true;
         });
         
         const container = document.getElementById('unassignedDropzone');
-        if(!container) return;
-        
         container.innerHTML = '';
-        if(filtered.length === 0){
+        if (filtered.length === 0) {
             container.innerHTML = '<div style="text-align:center;padding:40px;color:#64748b;">No unassigned players found</div>';
-            return;
         }
-        
         filtered.forEach(p => {
             let card = document.createElement('div');
-            card.style.borderLeftColor = getRatingColor(p.rating);
             card.className = 'unassigned-player-card';
+            card.style.borderLeftColor = getRatingColor(p.rating);
             card.setAttribute('data-playerid', p.id);
-            card.innerHTML = `
-                <div class="unassigned-player-info">
-                    <div class="unassigned-player-name">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)} ${p.jersey ? `<span style="background:#e2e8f0;padding:2px 6px;border-radius:12px;font-size:0.7rem;">#${escapeHtml(p.jersey)}</span>` : ''}</div>
-                    <div class="unassigned-player-details">
-                        <span><span class="rating-dot" style="background:${getRatingColor(p.rating)}"></span>${getRatingIcon(p.rating)} ${p.rating || 'No Rating'}</span>
-                        <span>${getStatusIcon(p.status)} ${p.status || 'Evaluate'}</span>
-                        ${p.field ? `<span><i class="fas fa-map-marker-alt"></i> Field ${escapeHtml(p.field)}</span>` : ''}
-                    </div>
-                </div>
-                <i class="fas fa-grip-vertical" style="color:#cbd5e1;"></i>
-            `;
-            card.onclick = (e) => { if(!e.target.closest('.fa-grip-vertical')) window.openPlayerDetail(p.id); };
+            card.innerHTML = `<div class="unassigned-player-info"><div class="unassigned-player-name">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}</div><div class="unassigned-player-details">${getRatingIcon(p.rating)} ${p.rating || 'No Rating'} | ${getStatusIcon(p.status)} ${p.status}</div></div><i class="fas fa-grip-vertical"></i>`;
+            card.onclick = (e) => { if (!e.target.closest('.fa-grip-vertical')) window.openPlayerDetail(p.id); };
             container.appendChild(card);
         });
         
-        if(unassignedSortable) unassignedSortable.destroy();
-        unassignedSortable = new Sortable(container, {
-            group: { name: 'roster', pull: true, revertClone: false },
-            animation: 200,
-            sort: true,
-            onEnd: async function(evt) {
-                let playerId = evt.item.getAttribute('data-playerid');
-                let newTeam = evt.to.getAttribute('data-team');
-                if(playerId && newTeam) {
-                    await updateAndRefresh(playerId, 'assignedTeam', newTeam);
+        if (unassignedSortable) unassignedSortable.destroy();
+        unassignedSortable = new Sortable(container, { group: 'roster', animation: 200, onEnd: async (evt) => {
+            let playerId = evt.item.dataset.playerid;
+            let newTeam = evt.to.dataset.team;
+            if (playerId && newTeam) await updatePlayerField(playerId, 'assignedTeam', newTeam);
+        }});
+    }
+    
+    // FIXED: Import spreadsheet with proper date handling
+    async function importSpreadsheet(file) {
+        if (!currentEventId || !currentAgeGroup) { 
+            alert("Please select an event and age group first"); 
+            return; 
+        }
+        
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+            
+            if (rows.length < 2) {
+                alert("File has no data rows");
+                return;
+            }
+            
+            // Find column indices (case insensitive)
+            const headers = rows[0].map(h => String(h || '').toUpperCase());
+            let idx = { 
+                number: -1, first: -1, last: -1, dob: -1, phone: -1, 
+                parent: -1, email: -1, club: -1, medical: -1, field: -1, 
+                jersey: -1, position: -1 
+            };
+            
+            headers.forEach((h, i) => {
+                if (h.includes('NUMBER') || h === '#' || h === 'JERSEY') idx.number = i;
+                if (h.includes('FIRST')) idx.first = i;
+                if (h.includes('LAST')) idx.last = i;
+                if (h.includes('DOB') || h.includes('BIRTH') || h.includes('DATE')) idx.dob = i;
+                if (h.includes('PHONE')) idx.phone = i;
+                if (h.includes('PARENT')) idx.parent = i;
+                if (h.includes('EMAIL')) idx.email = i;
+                if (h.includes('CLUB')) idx.club = i;
+                if (h.includes('MEDICAL')) idx.medical = i;
+                if (h.includes('FIELD')) idx.field = i;
+                if (h.includes('POSITION')) idx.position = i;
+            });
+            
+            if (idx.first === -1 || idx.last === -1) {
+                alert("Spreadsheet must have 'First' and 'Last' name columns");
+                return;
+            }
+            
+            // Helper function to format dates from Excel
+            function formatDate(value) {
+                if (!value) return '';
+                
+                // If it's a number (Excel serial date)
+                if (typeof value === 'number') {
+                    const date = new Date((value - 25569) * 86400 * 1000);
+                    return date.toISOString().split('T')[0];
+                }
+                
+                // If it's a string with timestamp like "2014-03-23 00:00:00"
+                if (typeof value === 'string') {
+                    const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+                    if (match) {
+                        return match[1];
+                    }
+                    // Try to parse as date
+                    const parsed = new Date(value);
+                    if (!isNaN(parsed.getTime())) {
+                        return parsed.toISOString().split('T')[0];
+                    }
+                }
+                
+                // If it's already a Date object
+                if (value instanceof Date) {
+                    return value.toISOString().split('T')[0];
+                }
+                
+                return value;
+            }
+            
+            const players = await getData(`players_${currentEventId}`) || {};
+            let newCount = 0, dupCount = 0;
+            let rowErrors = [];
+            
+            for (let i = 1; i < rows.length; i++) {
+                const r = rows[i];
+                const firstName = (r[idx.first] || '').toString().trim();
+                const lastName = (r[idx.last] || '').toString().trim();
+                
+                if (!firstName && !lastName) continue;
+                
+                const dob = formatDate(r[idx.dob]);
+                const phone = r[idx.phone] ? String(r[idx.phone]).trim() : '';
+                const jersey = idx.number !== -1 && r[idx.number] ? String(r[idx.number]).trim() : '';
+                
+                // Check for duplicate
+                const duplicate = Object.values(players).some(p => 
+                    p.firstName === firstName && 
+                    p.lastName === lastName && 
+                    p.dob === dob && 
+                    p.phoneNumber === phone && 
+                    p.ageGroup === currentAgeGroup
+                );
+                
+                if (duplicate) {
+                    dupCount++;
+                    continue;
+                }
+                
+                try {
+                    const newId = (Date.now() + newCount).toString();
+                    players[newId] = {
+                        id: newId,
+                        firstName: firstName,
+                        lastName: lastName,
+                        dob: dob,
+                        phoneNumber: phone,
+                        parentName: r[idx.parent] || '',
+                        email: r[idx.email] || '',
+                        clubHistory: r[idx.club] || '',
+                        medicalConditions: r[idx.medical] || '',
+                        field: r[idx.field] || '',
+                        jersey: jersey,
+                        position: r[idx.position] || '',
+                        rating: '',
+                        status: 'Evaluate',
+                        assignedTeam: '',
+                        notes: '',
+                        ageGroup: currentAgeGroup
+                    };
+                    newCount++;
+                } catch (err) {
+                    rowErrors.push(`Row ${i + 1}: ${err.message}`);
                 }
             }
+            
+            await setData(`players_${currentEventId}`, players);
+            await loadPlayersForEvent();
+            
+            let message = `✅ Import complete!\nAdded: ${newCount} players\nDuplicates skipped: ${dupCount}`;
+            if (rowErrors.length > 0) {
+                message += `\n\nErrors in ${rowErrors.length} rows. Check console for details.`;
+                console.error("Import errors:", rowErrors);
+            }
+            alert(message);
+            
+        } catch (error) {
+            console.error("Import error:", error);
+            alert("Error importing file: " + error.message);
+        }
+    }
+    
+    // Add walk-up player
+    async function addWalkup() {
+        if (!currentEventId || !currentAgeGroup) { 
+            alert("Please select an event and age group first"); 
+            return; 
+        }
+        
+        const modalId = 'walkup-modal-' + Date.now();
+        
+        let html = `<div id="${modalId}">
+            <div class="form-row"><div class="form-group"><label>First Name *</label><input id="fn_${modalId}" required></div>
+            <div class="form-group"><label>Last Name *</label><input id="ln_${modalId}" required></div></div>
+            <div class="form-row"><div class="form-group"><label>DOB</label><input id="dob_${modalId}" placeholder="YYYY-MM-DD"></div>
+            <div class="form-group"><label>Phone</label><input id="phone_${modalId}"></div></div>
+            <div class="form-group"><label>Parent Name</label><input id="parent_${modalId}"></div>
+            <div class="form-group"><label>Email</label><input id="email_${modalId}" type="email"></div>
+            <div class="form-group"><label>Club History</label><input id="club_${modalId}"></div>
+            <div class="form-group"><label>Position</label><input id="pos_${modalId}"></div>
+            <div class="form-row"><div class="form-group"><label>Jersey Number</label><input id="jersey_${modalId}" placeholder="Tryout jersey #"></div>
+            <div class="form-group"><label>Field</label><input id="field_${modalId}" placeholder="Field #"></div></div>
+            <div class="form-group"><label>Medical Conditions</label><textarea id="med_${modalId}" rows="2"></textarea></div>
+            <div class="form-row"><div class="form-group"><label>Rating</label>
+                <select id="rating_${modalId}"><option value="">Select Rating</option>${RATING_OPTIONS.map(r=>`<option>${r}</option>`).join('')}</select>
+            </div>
+            <div class="form-group"><label>Status</label>
+                <select id="status_${modalId}">${STATUS_OPTIONS.map(s=>`<option>${s}</option>`).join('')}</select>
+            </div></div>
+            <div class="form-group"><label>Team</label>
+                <select id="team_${modalId}"><option value=""></option>${TEAM_OPTIONS.map(t=>`<option>${t}</option>`).join('')}</select>
+            </div>
+            <div class="form-group"><label>Notes</label><textarea id="notes_${modalId}" rows="2"></textarea></div>
+            <div class="form-group" style="background:#e0f2fe; padding:10px; border-radius:12px;">
+                <strong>Will be added to:</strong> ${escapeHtml(currentAgeGroup)}
+            </div>
+        </div>`;
+        
+        showModal("Add Walk-up Player", html, async (modal) => {
+            const firstName = document.getElementById(`fn_${modalId}`).value.trim();
+            const lastName = document.getElementById(`ln_${modalId}`).value.trim();
+            
+            if (!firstName || !lastName) { 
+                alert("First and last name are required"); 
+                return; 
+            }
+            
+            const players = await getData(`players_${currentEventId}`) || {};
+            
+            const duplicate = Object.values(players).some(p => 
+                p.firstName === firstName && 
+                p.lastName === lastName && 
+                p.ageGroup === currentAgeGroup
+            );
+            
+            if (duplicate) {
+                alert(`A player named ${firstName} ${lastName} already exists in ${currentAgeGroup}. Duplicate not added.`);
+                return;
+            }
+            
+            const newId = Date.now().toString();
+            const newPlayer = {
+                id: newId,
+                firstName: firstName,
+                lastName: lastName,
+                dob: document.getElementById(`dob_${modalId}`).value || '',
+                phoneNumber: document.getElementById(`phone_${modalId}`).value || '',
+                parentName: document.getElementById(`parent_${modalId}`).value || '',
+                email: document.getElementById(`email_${modalId}`).value || '',
+                clubHistory: document.getElementById(`club_${modalId}`).value || '',
+                position: document.getElementById(`pos_${modalId}`).value || '',
+                field: document.getElementById(`field_${modalId}`).value || '',
+                jersey: document.getElementById(`jersey_${modalId}`).value || '',
+                medicalConditions: document.getElementById(`med_${modalId}`).value || '',
+                rating: document.getElementById(`rating_${modalId}`).value || '',
+                status: document.getElementById(`status_${modalId}`).value,
+                assignedTeam: document.getElementById(`team_${modalId}`).value || '',
+                notes: document.getElementById(`notes_${modalId}`).value || 'Walk-up registration',
+                ageGroup: currentAgeGroup
+            };
+            
+            players[newId] = newPlayer;
+            await setData(`players_${currentEventId}`, players);
+            await loadPlayersForEvent();
+            alert(`✅ ${firstName} ${lastName} added to ${currentAgeGroup}!`);
         });
     }
     
-    function filterClickHandler(e){
-        let type = e.currentTarget.dataset.filterType, val = e.currentTarget.dataset.val;
+    function filterClickHandler(e) {
+        let type = e.currentTarget.dataset.filterType;
+        let val = e.currentTarget.dataset.val;
         let idx = currentFilters[type].indexOf(val);
-        if(idx === -1){ 
+        if (idx === -1) { 
             currentFilters[type].push(val); 
             e.currentTarget.classList.add('active-filter'); 
         } else { 
-            currentFilters[type].splice(idx,1); 
+            currentFilters[type].splice(idx, 1); 
             e.currentTarget.classList.remove('active-filter'); 
         }
         renderTryoutTable();
     }
     
-    function clearFilters(){ 
-        currentFilters = { status: [], rating: [], team: [] }; 
-        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active-filter')); 
-        renderTryoutTable(); 
+    function clearFilters() {
+        currentFilters = { status: [], rating: [], team: [] };
+        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active-filter'));
+        renderTryoutTable();
     }
     
-    // Event binding
+    // Authentication
+    async function handleLogin() {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        const errorDiv = document.getElementById('loginError');
+        try {
+            await auth.signInWithEmailAndPassword(email, password);
+            errorDiv.textContent = '';
+        } catch(e) {
+            errorDiv.textContent = e.message;
+        }
+    }
+    
+    async function handleSignup() {
+        const email = document.getElementById('signupEmail').value.trim();
+        const password = document.getElementById('signupPassword').value;
+        const confirm = document.getElementById('signupConfirmPassword').value;
+        const errorDiv = document.getElementById('signupError');
+        if (password !== confirm) { errorDiv.textContent = "Passwords don't match"; return; }
+        if (password.length < 6) { errorDiv.textContent = "Password must be at least 6 characters"; return; }
+        try {
+            await auth.createUserWithEmailAndPassword(email, password);
+            errorDiv.textContent = '';
+        } catch(e) {
+            errorDiv.textContent = e.message;
+        }
+    }
+    
+    function showLoginScreen() { document.getElementById('loginContainer').style.display = 'flex'; document.getElementById('signupContainer').style.display = 'none'; document.getElementById('mainApp').style.display = 'none'; }
+    function showSignupScreen() { document.getElementById('loginContainer').style.display = 'none'; document.getElementById('signupContainer').style.display = 'flex'; document.getElementById('mainApp').style.display = 'none'; }
+    function showMainApp() { document.getElementById('loginContainer').style.display = 'none'; document.getElementById('signupContainer').style.display = 'none'; document.getElementById('mainApp').style.display = 'block'; document.getElementById('userEmail').textContent = currentUser?.email || ''; }
+    function handleLogout() { auth.signOut(); }
+    
+    // Sort handler
+    function initSortHandlers() {
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+            th.removeEventListener('click', sortClickHandler);
+            th.addEventListener('click', sortClickHandler);
+        });
+    }
+    
+    function sortClickHandler() {
+        const col = this.dataset.sort;
+        if (sortColumn === col) {
+            sortAsc = !sortAsc;
+        } else {
+            sortColumn = col;
+            sortAsc = true;
+        }
+        renderTryoutTable();
+        initSortHandlers();
+    }
+    
+    // Event listeners
+    document.getElementById('loginBtn').onclick = handleLogin;
+    document.getElementById('signupBtn').onclick = handleSignup;
+    document.getElementById('showSignupBtn').onclick = showSignupScreen;
+    document.getElementById('showLoginBtn').onclick = showLoginScreen;
+    document.getElementById('logoutBtn').onclick = handleLogout;
     document.getElementById('openEventManagerBtn').onclick = openEventManager;
-    document.getElementById('importSpreadsheetBtn').onclick = () => { 
-        if(!currentAgeGroup) return alert("Select age group first"); 
-        let inp = document.createElement('input'); 
-        inp.type = 'file'; 
-        inp.accept = '.xlsx,.xls'; 
-        inp.onchange = e => importSpreadsheet(e.target.files[0]); 
-        inp.click(); 
-    };
     document.getElementById('addWalkupBtn').onclick = addWalkup;
     document.getElementById('clearFiltersBtn').onclick = clearFilters;
-    document.getElementById('forceRefreshBtn').onclick = forceRefresh;
-    document.getElementById('compactViewToggle').onchange = toggleCompactView;
+    document.getElementById('importSpreadsheetBtn').onclick = () => { 
+        const inp = document.createElement('input'); 
+        inp.type = 'file'; 
+        inp.accept = '.xlsx,.xls,.csv'; 
+        inp.onchange = e => { if (e.target.files[0]) importSpreadsheet(e.target.files[0]); }; 
+        inp.click(); 
+    };
     document.getElementById('eventSelect').onchange = (e) => { currentEventId = e.target.value; loadEvents(); };
     document.getElementById('ageGroupSelect').onchange = (e) => { currentAgeGroup = e.target.value; loadPlayersForEvent(); };
     document.getElementById('unassignedRatingFilter')?.addEventListener('change', () => renderUnassignedPool());
     document.getElementById('unassignedStatusFilter')?.addEventListener('change', () => renderUnassignedPool());
     document.getElementById('unassignedSearchFilter')?.addEventListener('input', () => renderUnassignedPool());
     
-    document.querySelectorAll('.mode-tab').forEach(btn => { 
-        btn.onclick = () => { 
-            currentMode = btn.dataset.mode; 
-            document.getElementById('tryoutView').style.display = currentMode === 'tryout' ? 'block' : 'none'; 
-            document.getElementById('rosterView').style.display = currentMode === 'roster' ? 'block' : 'none'; 
-            document.querySelectorAll('.mode-tab').forEach(b => b.classList.remove('active')); 
-            btn.classList.add('active'); 
-            renderCurrentView(); 
-        }; 
-    });
-    document.querySelector('.mode-tab[data-mode="tryout"]').classList.add('active');
-    
-    document.querySelectorAll('th[data-sort]').forEach(th => { 
-        th.onclick = () => { 
-            let col = th.dataset.sort; 
-            if(sortColumn === col) sortAsc = !sortAsc; 
-            else { sortColumn = col; sortAsc = true; } 
-            renderTryoutTable(); 
-        }; 
+    document.querySelectorAll('.mode-tab').forEach(btn => {
+        btn.onclick = () => {
+            currentMode = btn.dataset.mode;
+            document.getElementById('tryoutView').style.display = currentMode === 'tryout' ? 'block' : 'none';
+            document.getElementById('rosterView').style.display = currentMode === 'roster' ? 'block' : 'none';
+            document.querySelectorAll('.mode-tab').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderCurrentView();
+        };
     });
     document.querySelectorAll('.filter-btn').forEach(btn => btn.addEventListener('click', filterClickHandler));
     
-    // Initialize view mode
-    applyViewMode();
-    loadEvents();
+    initViewToggle();
+    initSortHandlers();
+    
+    // Auth state listener
+    auth.onAuthStateChanged(async (user) => {
+        currentUser = user;
+        if (user) {
+            showMainApp();
+            await loadEvents();
+        } else {
+            showLoginScreen();
+        }
+    });
 </script>
 </body>
 </html>
