@@ -3,19 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Soccer Tryouts Manager | Complete System</title>
+    <title>Soccer Tryouts Manager | Real-Time Sync</title>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
     <!-- Drag & Drop -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-    <!-- SheetJS for Excel import -->
+    <!-- SheetJS for Excel import/export -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        /* Same styles as before - keeping it compact for brevity */
         * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
         body { background: #f0f7ff; margin: 0; padding: 20px; transition: all 0.2s; }
         
@@ -30,6 +29,15 @@
         #mainApp { display: none; }
         .app-container { max-width: 1600px; margin: 0 auto; }
         
+        /* Real-time indicator */
+        .sync-status { display: flex; align-items: center; gap: 6px; background: #dcfce7; padding: 4px 12px; border-radius: 20px; font-size: 0.7rem; }
+        .sync-status.connecting { background: #fef3c7; }
+        .sync-status.offline { background: #ffe4e2; }
+        .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite; }
+        .sync-status.connecting .sync-dot { background: #eab308; }
+        .sync-status.offline .sync-dot { background: #ef4444; animation: none; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        
         body.compact-view .selection-bar { padding: 8px 16px; margin-bottom: 12px; }
         body.compact-view .mode-tab { padding: 6px 20px; font-size: 0.85rem; }
         body.compact-view .mode-tabs { margin-bottom: 12px; }
@@ -37,14 +45,12 @@
         body.compact-view th, body.compact-view td { padding: 4px 6px; font-size: 0.75rem; }
         body.compact-view input, body.compact-view select { padding: 3px 5px; font-size: 0.7rem; }
         body.compact-view .btn { padding: 4px 10px; font-size: 0.75rem; }
-        body.compact-view .player-card { padding: 6px 8px; margin: 4px 0; }
         
         body.comfort-view .selection-bar { padding: 16px 24px; margin-bottom: 24px; }
         body.comfort-view .mode-tab { padding: 12px 28px; font-size: 1rem; }
         body.comfort-view .mode-tabs { margin-bottom: 24px; }
         body.comfort-view .filter-bar { margin: 20px 0 16px; padding: 12px 20px; }
         body.comfort-view th, body.comfort-view td { padding: 12px 8px; font-size: 0.85rem; }
-        body.comfort-view input, body.comfort-view select { padding: 6px 8px; font-size: 0.8rem; }
         
         .selection-bar { background: white; border-radius: 40px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .selection-group { display: flex; align-items: center; gap: 12px; background: #f1f5f9; padding: 8px 20px; border-radius: 40px; }
@@ -93,9 +99,8 @@
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
         .user-badge { background: #e0f2fe; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; display: flex; align-items: center; gap: 8px; }
-        .storage-badge { background: #dcfce7; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; }
         .view-toggle { display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 4px 12px; border-radius: 40px; cursor: pointer; }
-        input, select, textarea { border-radius: 12px; border: 1px solid #cbd5e1; }
+        .sync-status { display: flex; align-items: center; gap: 6px; background: #dcfce7; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; }
     </style>
 </head>
 <body class="comfort-view">
@@ -153,7 +158,10 @@
                 <span id="userEmail"></span>
             </div>
             <button id="logoutBtn" class="btn btn-danger">Logout</button>
-            <span id="storageBadge" class="storage-badge">Cloud Sync</span>
+            <div class="sync-status" id="syncStatus">
+                <div class="sync-dot"></div>
+                <span>Live Sync</span>
+            </div>
         </div>
         
         <div class="mode-tabs">
@@ -187,6 +195,7 @@
                 </div>
                 <div>
                     <button id="importSpreadsheetBtn" class="btn"><i class="fas fa-upload"></i> Import</button>
+                    <button id="exportBtn" class="btn btn-outline"><i class="fas fa-download"></i> Export</button>
                     <button id="addWalkupBtn" class="btn btn-outline"><i class="fas fa-user-plus"></i> Walk-up</button>
                     <button id="clearFiltersBtn" class="btn btn-outline btn-sm"><i class="fas fa-eraser"></i> Clear</button>
                 </div>
@@ -241,7 +250,6 @@
 
 <script>
     // ======================== FIREBASE CONFIG ==================
-    // !!! REPLACE WITH YOUR ACTUAL FIREBASE CREDENTIALS !!!
     const firebaseConfig = {
 	apiKey: "AIzaSyBQz_2K0tNUfH5-CAxeuxGHiOPI6MEM95k",
 	authDomain: "snefc-scout.firebaseapp.com",
@@ -255,6 +263,9 @@
     
     // Initialize Firebase
     let db, auth;
+    let playersListener = null;
+    let eventsListener = null;
+    
     try {
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
@@ -277,6 +288,7 @@
     let currentAgeGroups = [];
     let sortableInstances = [];
     let unassignedSortable = null;
+    let isUpdatingFromSync = false; // Prevent circular updates
     
     const TEAM_OPTIONS = ["ECNL", "ECNL-RL", "Gold", "Not Offering"];
     const RATING_OPTIONS = ["Elite", "Premier", "Competitive", "Recreational"];
@@ -286,6 +298,18 @@
     function getRatingIcon(r) { const icons = { Elite:'⭐', Premier:'🏅', Competitive:'⚡', Recreational:'🌿' }; return icons[r] || ''; }
     function getRatingColor(r) { const colors = { Elite:'#d4af37', Premier:'#a0c4ff', Competitive:'#9bf6b4', Recreational:'#bdb2ff' }; return colors[r] || '#ddd'; }
     function getStatusIcon(s) { const icons = { Evaluate:'🔍', Offered:'📋', Committed:'✅', Declined:'❌', 'Not Offering':'🚫' }; return icons[s] || ''; }
+    
+    // Update sync status indicator
+    function updateSyncStatus(connected) {
+        const statusDiv = document.getElementById('syncStatus');
+        if (connected) {
+            statusDiv.className = 'sync-status';
+            statusDiv.innerHTML = '<div class="sync-dot"></div><span>Live Sync</span>';
+        } else {
+            statusDiv.className = 'sync-status offline';
+            statusDiv.innerHTML = '<div class="sync-dot"></div><span>Offline - Reconnecting...</span>';
+        }
+    }
     
     // Compact/Comfort View Toggle
     function initViewToggle() {
@@ -316,9 +340,56 @@
     }
     
     // Database helpers
-    async function getData(path) { if (!db || !currentUser) return null; const s = await db.ref(path).once('value'); return s.val(); }
-    async function setData(path, val) { if (!db || !currentUser) return; await db.ref(path).set(val); }
-    async function deleteChild(path, id) { if (!db || !currentUser) return; await db.ref(`${path}/${id}`).set(null); }
+    async function setData(path, val) { 
+        if (!db || !currentUser) return; 
+        await db.ref(path).set(val); 
+    }
+    
+    async function updateData(path, val) { 
+        if (!db || !currentUser) return; 
+        await db.ref(path).update(val); 
+    }
+    
+    async function deleteChild(path, id) { 
+        if (!db || !currentUser) return; 
+        await db.ref(`${path}/${id}`).set(null); 
+    }
+    
+    // REAL-TIME LISTENERS
+    function setupRealtimeListeners() {
+        // Remove existing listeners
+        if (playersListener) {
+            playersListener.off();
+        }
+        if (eventsListener) {
+            eventsListener.off();
+        }
+        
+        if (!currentUser || !currentEventId || !currentAgeGroup) return;
+        
+        // Listen for player changes in real-time
+        const playersRef = db.ref(`players_${currentEventId}`);
+        playersListener = playersRef.on('value', (snapshot) => {
+            if (isUpdatingFromSync) return;
+            const data = snapshot.val() || {};
+            const newPlayers = Object.values(data).filter(p => p.ageGroup === currentAgeGroup).map(p => ({...p, jersey: p.jersey||'', field: p.field||'', rating: p.rating||''}));
+            
+            // Check if data actually changed
+            if (JSON.stringify(allPlayers) !== JSON.stringify(newPlayers)) {
+                allPlayers = newPlayers;
+                renderCurrentView();
+                // Show brief visual feedback that sync occurred
+                const statusDiv = document.getElementById('syncStatus');
+                statusDiv.style.background = '#bbf7d0';
+                setTimeout(() => { if (statusDiv) statusDiv.style.background = ''; }, 500);
+            }
+        });
+        
+        // Monitor connection status
+        db.ref('.info/connected').on('value', (snap) => {
+            updateSyncStatus(snap.val());
+        });
+    }
     
     function showModal(title, html, onConfirm) {
         let d = document.createElement('div'); d.className = 'modal';
@@ -338,7 +409,7 @@
         showModal("Event Manager", html, () => {});
         
         async function refreshEvents() {
-            const events = await getData('tryoutEvents') || {};
+            const events = await getDataOnce('tryoutEvents') || {};
             const container = document.getElementById('eventListContainer');
             container.innerHTML = '';
             for (let id in events) {
@@ -350,7 +421,13 @@
                 container.appendChild(div);
             }
             document.querySelectorAll('.select-event').forEach(btn => {
-                btn.onclick = () => { currentEventId = btn.dataset.id; refreshEvents(); refreshAgeGroups(); loadEvents(); };
+                btn.onclick = () => { 
+                    currentEventId = btn.dataset.id; 
+                    refreshEvents(); 
+                    refreshAgeGroups(); 
+                    loadEvents(); 
+                    setupRealtimeListeners();
+                };
             });
         }
         
@@ -359,7 +436,7 @@
                 document.getElementById('ageGroupList').innerHTML = '<p style="color:gray;">Select an event first</p>'; 
                 return; 
             }
-            const events = await getData('tryoutEvents') || {};
+            const events = await getDataOnce('tryoutEvents') || {};
             const ageGroups = events[currentEventId]?.ageGroups || [];
             document.getElementById('ageGroupList').innerHTML = ageGroups.map(ag => `<span style="background:#e2e8f0; padding:6px 12px; border-radius:30px; display:inline-flex; margin:4px;">${escapeHtml(ag)} <button class="remove-ag" data-ag="${escapeHtml(ag)}" style="background:none; border:none; color:#c1292e; cursor:pointer;">✖</button></span>`).join('');
             
@@ -367,9 +444,9 @@
                 btn.onclick = async () => {
                     let ag = btn.dataset.ag;
                     if (confirm(`Remove age group "${ag}"? Players will lose this assignment.`)) {
-                        let events = await getData('tryoutEvents') || {};
+                        let events = await getDataOnce('tryoutEvents') || {};
                         if (events[currentEventId]) {
-                            const players = await getData(`players_${currentEventId}`) || {};
+                            const players = await getDataOnce(`players_${currentEventId}`) || {};
                             for (let pid in players) {
                                 if (players[pid].ageGroup === ag) {
                                     players[pid].ageGroup = null;
@@ -389,7 +466,7 @@
         document.getElementById('newEventBtn').onclick = async () => {
             let name = prompt("Event name:");
             if (name) {
-                let events = await getData('tryoutEvents') || {};
+                let events = await getDataOnce('tryoutEvents') || {};
                 events[Date.now()] = { name, ageGroups: [] };
                 await setData('tryoutEvents', events);
                 refreshEvents();
@@ -397,7 +474,7 @@
         };
         document.getElementById('editEventBtn').onclick = async () => {
             if (!currentEventId) { alert("Select an event first"); return; }
-            let events = await getData('tryoutEvents') || {};
+            let events = await getDataOnce('tryoutEvents') || {};
             let newName = prompt("New name:", events[currentEventId]?.name);
             if (newName && events[currentEventId]) {
                 events[currentEventId].name = newName;
@@ -410,19 +487,20 @@
             if (!currentEventId) { alert("Select an event first"); return; }
             if (confirm("Delete this event and ALL its players? This cannot be undone!")) {
                 await deleteChild('players', `players_${currentEventId}`);
-                let events = await getData('tryoutEvents') || {};
+                let events = await getDataOnce('tryoutEvents') || {};
                 delete events[currentEventId];
                 await setData('tryoutEvents', events);
                 currentEventId = null;
                 refreshEvents();
                 loadEvents();
+                if (playersListener) playersListener.off();
             }
         };
         document.getElementById('addAgeGroupBtn').onclick = async () => {
             if (!currentEventId) { alert("Select an event first"); return; }
             let newAg = document.getElementById('newAgeGroupNameInput').value.trim();
             if (!newAg) { alert("Please enter an age group name"); return; }
-            let events = await getData('tryoutEvents') || {};
+            let events = await getDataOnce('tryoutEvents') || {};
             if (events[currentEventId]) {
                 let ageGroups = events[currentEventId].ageGroups || [];
                 if (ageGroups.includes(newAg)) {
@@ -442,34 +520,31 @@
         refreshAgeGroups();
     }
     
+    // Helper for one-time data fetch
+    async function getDataOnce(path) { 
+        if (!db || !currentUser) return null; 
+        const s = await db.ref(path).once('value'); 
+        return s.val(); 
+    }
+    
+    // Update player field with real-time sync
     async function updatePlayerField(id, field, value) {
         if (!currentEventId) return;
+        if (isUpdatingFromSync) return;
         
         try {
-            const players = await getData(`players_${currentEventId}`) || {};
-            if (players[id]) {
-                players[id][field] = value;
-                await setData(`players_${currentEventId}`, players);
-                console.log(`Updated ${field} to "${value}" for player ${id}`);
-            }
-            
-            const idx = allPlayers.findIndex(p => p.id === id);
-            if (idx !== -1) {
-                allPlayers[idx][field] = value;
-            }
-            
-            if (currentMode === "tryout") {
-                renderTryoutTable();
-            } else {
-                renderRosterBuilder();
-            }
+            isUpdatingFromSync = true;
+            await updateData(`players_${currentEventId}/${id}`, { [field]: value });
+            console.log(`Updated ${field} to "${value}" for player ${id}`);
         } catch (error) {
             console.error("Error updating player field:", error);
+        } finally {
+            isUpdatingFromSync = false;
         }
     }
     
     async function loadEvents() {
-        const events = await getData('tryoutEvents') || {};
+        const events = await getDataOnce('tryoutEvents') || {};
         const eventSelect = document.getElementById('eventSelect');
         eventSelect.innerHTML = '<option value="">Select event</option>';
         for (let id in events) {
@@ -492,14 +567,8 @@
         else if (currentAgeGroups.length > 0) { currentAgeGroup = currentAgeGroups[0]; ageSelect.value = currentAgeGroup; }
         else currentAgeGroup = null;
         
-        await loadPlayersForEvent();
-    }
-    
-    async function loadPlayersForEvent() {
-        if (!currentEventId || !currentAgeGroup) { allPlayers = []; renderCurrentView(); return; }
-        const data = await getData(`players_${currentEventId}`) || {};
-        allPlayers = Object.values(data).filter(p => p.ageGroup === currentAgeGroup).map(p => ({...p, jersey: p.jersey||'', field: p.field||'', rating: p.rating||''}));
-        renderCurrentView();
+        // Set up real-time listeners for the new event/age group
+        setupRealtimeListeners();
     }
     
     function renderCurrentView() {
@@ -529,25 +598,28 @@
                     <hr><button type="button" id="delPlayerBtn" class="btn btn-danger" style="width:100%">Delete Player</button>`;
         
         showModal("Edit Player", html, async () => {
-            const players = await getData(`players_${currentEventId}`) || {};
-            if (players[id]) {
-                players[id].firstName = document.getElementById('efn').value;
-                players[id].lastName = document.getElementById('eln').value;
-                players[id].dob = document.getElementById('edob').value;
-                players[id].phoneNumber = document.getElementById('ephone').value;
-                players[id].parentName = document.getElementById('eparent').value;
-                players[id].email = document.getElementById('eemail').value;
-                players[id].clubHistory = document.getElementById('eclub').value;
-                players[id].position = document.getElementById('epos').value;
-                players[id].jersey = document.getElementById('ejersey').value;
-                players[id].field = document.getElementById('efield').value;
-                players[id].medicalConditions = document.getElementById('emed').value;
-                players[id].rating = document.getElementById('erating').value;
-                players[id].status = document.getElementById('estatus').value;
-                players[id].assignedTeam = document.getElementById('eteam').value;
-                players[id].notes = document.getElementById('enotes').value;
-                await setData(`players_${currentEventId}`, players);
-                await loadPlayersForEvent();
+            if (isUpdatingFromSync) return;
+            isUpdatingFromSync = true;
+            try {
+                await updateData(`players_${currentEventId}/${id}`, {
+                    firstName: document.getElementById('efn').value,
+                    lastName: document.getElementById('eln').value,
+                    dob: document.getElementById('edob').value,
+                    phoneNumber: document.getElementById('ephone').value,
+                    parentName: document.getElementById('eparent').value,
+                    email: document.getElementById('eemail').value,
+                    clubHistory: document.getElementById('eclub').value,
+                    position: document.getElementById('epos').value,
+                    jersey: document.getElementById('ejersey').value,
+                    field: document.getElementById('efield').value,
+                    medicalConditions: document.getElementById('emed').value,
+                    rating: document.getElementById('erating').value,
+                    status: document.getElementById('estatus').value,
+                    assignedTeam: document.getElementById('eteam').value,
+                    notes: document.getElementById('enotes').value
+                });
+            } finally {
+                isUpdatingFromSync = false;
             }
         });
         
@@ -556,8 +628,6 @@
             if (delBtn) delBtn.onclick = async () => {
                 if (confirm(`Delete ${p.firstName} ${p.lastName}?`)) {
                     await deleteChild(`players_${currentEventId}`, id);
-                    document.querySelector('.modal')?.remove();
-                    await loadPlayersForEvent();
                 }
             };
         }, 100);
@@ -715,7 +785,64 @@
         }});
     }
     
-    // FIXED: Import spreadsheet with proper date handling
+    // Export function
+    async function exportToExcel() {
+        if (!currentEventId || !currentAgeGroup) {
+            alert("Please select an event and age group first");
+            return;
+        }
+        
+        if (allPlayers.length === 0) {
+            alert("No players to export for the selected event and age group");
+            return;
+        }
+        
+        try {
+            const events = await getDataOnce('tryoutEvents') || {};
+            const eventName = events[currentEventId]?.name || 'Event';
+            
+            const exportData = allPlayers.map(player => ({
+                'Jersey #': player.jersey || '',
+                'Field': player.field || '',
+                'First Name': player.firstName || '',
+                'Last Name': player.lastName || '',
+                'DOB': player.dob || '',
+                'Parent Name': player.parentName || '',
+                'Email': player.email || '',
+                'Phone Number': player.phoneNumber || '',
+                'Club History': player.clubHistory || '',
+                'Position': player.position || '',
+                'Rating': player.rating || '',
+                'Assigned Team': player.assignedTeam || '',
+                'Status': player.status || '',
+                'Medical Conditions': player.medicalConditions || '',
+                'Notes': player.notes || ''
+            }));
+            
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const colWidths = [
+                { wch: 10 }, { wch: 8 }, { wch: 15 }, { wch: 15 }, { wch: 12 },
+                { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 20 }, { wch: 15 },
+                { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 25 }, { wch: 20 }
+            ];
+            worksheet['!cols'] = colWidths;
+            
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, currentAgeGroup);
+            
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2,'0')}-${now.getDate().toString().padStart(2,'0')}`;
+            const filename = `${eventName}_${currentAgeGroup}_Export_${dateStr}.xlsx`;
+            
+            XLSX.writeFile(workbook, filename);
+            alert(`✅ Exported ${allPlayers.length} players to ${filename}`);
+        } catch (error) {
+            console.error("Export error:", error);
+            alert("Error exporting data: " + error.message);
+        }
+    }
+    
+    // Import spreadsheet
     async function importSpreadsheet(file) {
         if (!currentEventId || !currentAgeGroup) { 
             alert("Please select an event and age group first"); 
@@ -733,16 +860,11 @@
                 return;
             }
             
-            // Find column indices (case insensitive)
             const headers = rows[0].map(h => String(h || '').toUpperCase());
-            let idx = { 
-                number: -1, first: -1, last: -1, dob: -1, phone: -1, 
-                parent: -1, email: -1, club: -1, medical: -1, field: -1, 
-                jersey: -1, position: -1 
-            };
+            let idx = { number: -1, first: -1, last: -1, dob: -1, phone: -1, parent: -1, email: -1, club: -1, medical: -1, field: -1, jersey: -1, position: -1 };
             
             headers.forEach((h, i) => {
-                if (h.includes('NUMBER') || h === '#' || h === 'JERSEY') idx.number = i;
+                if (h.includes('NUMBER') || h === '#' || h.includes('JERSEY')) idx.number = i;
                 if (h.includes('FIRST')) idx.first = i;
                 if (h.includes('LAST')) idx.last = i;
                 if (h.includes('DOB') || h.includes('BIRTH') || h.includes('DATE')) idx.dob = i;
@@ -760,103 +882,54 @@
                 return;
             }
             
-            // Helper function to format dates from Excel
             function formatDate(value) {
                 if (!value) return '';
-                
-                // If it's a number (Excel serial date)
                 if (typeof value === 'number') {
                     const date = new Date((value - 25569) * 86400 * 1000);
                     return date.toISOString().split('T')[0];
                 }
-                
-                // If it's a string with timestamp like "2014-03-23 00:00:00"
                 if (typeof value === 'string') {
                     const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
-                    if (match) {
-                        return match[1];
-                    }
-                    // Try to parse as date
+                    if (match) return match[1];
                     const parsed = new Date(value);
-                    if (!isNaN(parsed.getTime())) {
-                        return parsed.toISOString().split('T')[0];
-                    }
+                    if (!isNaN(parsed.getTime())) return parsed.toISOString().split('T')[0];
                 }
-                
-                // If it's already a Date object
-                if (value instanceof Date) {
-                    return value.toISOString().split('T')[0];
-                }
-                
+                if (value instanceof Date) return value.toISOString().split('T')[0];
                 return value;
             }
             
-            const players = await getData(`players_${currentEventId}`) || {};
+            const players = await getDataOnce(`players_${currentEventId}`) || {};
             let newCount = 0, dupCount = 0;
-            let rowErrors = [];
             
             for (let i = 1; i < rows.length; i++) {
                 const r = rows[i];
                 const firstName = (r[idx.first] || '').toString().trim();
                 const lastName = (r[idx.last] || '').toString().trim();
-                
                 if (!firstName && !lastName) continue;
                 
                 const dob = formatDate(r[idx.dob]);
                 const phone = r[idx.phone] ? String(r[idx.phone]).trim() : '';
                 const jersey = idx.number !== -1 && r[idx.number] ? String(r[idx.number]).trim() : '';
                 
-                // Check for duplicate
                 const duplicate = Object.values(players).some(p => 
-                    p.firstName === firstName && 
-                    p.lastName === lastName && 
-                    p.dob === dob && 
-                    p.phoneNumber === phone && 
-                    p.ageGroup === currentAgeGroup
+                    p.firstName === firstName && p.lastName === lastName && p.dob === dob && p.phoneNumber === phone && p.ageGroup === currentAgeGroup
                 );
                 
-                if (duplicate) {
-                    dupCount++;
-                    continue;
-                }
+                if (duplicate) { dupCount++; continue; }
                 
-                try {
-                    const newId = (Date.now() + newCount).toString();
-                    players[newId] = {
-                        id: newId,
-                        firstName: firstName,
-                        lastName: lastName,
-                        dob: dob,
-                        phoneNumber: phone,
-                        parentName: r[idx.parent] || '',
-                        email: r[idx.email] || '',
-                        clubHistory: r[idx.club] || '',
-                        medicalConditions: r[idx.medical] || '',
-                        field: r[idx.field] || '',
-                        jersey: jersey,
-                        position: r[idx.position] || '',
-                        rating: '',
-                        status: 'Evaluate',
-                        assignedTeam: '',
-                        notes: '',
-                        ageGroup: currentAgeGroup
-                    };
-                    newCount++;
-                } catch (err) {
-                    rowErrors.push(`Row ${i + 1}: ${err.message}`);
-                }
+                const newId = (Date.now() + newCount).toString();
+                await updateData(`players_${currentEventId}`, {
+                    [newId]: {
+                        id: newId, firstName, lastName, dob, phoneNumber: phone,
+                        parentName: r[idx.parent] || '', email: r[idx.email] || '',
+                        clubHistory: r[idx.club] || '', medicalConditions: r[idx.medical] || '',
+                        field: r[idx.field] || '', jersey: jersey, position: r[idx.position] || '',
+                        rating: '', status: 'Evaluate', assignedTeam: '', notes: '', ageGroup: currentAgeGroup
+                    }
+                });
+                newCount++;
             }
-            
-            await setData(`players_${currentEventId}`, players);
-            await loadPlayersForEvent();
-            
-            let message = `✅ Import complete!\nAdded: ${newCount} players\nDuplicates skipped: ${dupCount}`;
-            if (rowErrors.length > 0) {
-                message += `\n\nErrors in ${rowErrors.length} rows. Check console for details.`;
-                console.error("Import errors:", rowErrors);
-            }
-            alert(message);
-            
+            alert(`✅ Import complete!\nAdded: ${newCount} players\nDuplicates skipped: ${dupCount}`);
         } catch (error) {
             console.error("Import error:", error);
             alert("Error importing file: " + error.message);
@@ -899,7 +972,7 @@
             </div>
         </div>`;
         
-        showModal("Add Walk-up Player", html, async (modal) => {
+        showModal("Add Walk-up Player", html, async () => {
             const firstName = document.getElementById(`fn_${modalId}`).value.trim();
             const lastName = document.getElementById(`ln_${modalId}`).value.trim();
             
@@ -908,12 +981,10 @@
                 return; 
             }
             
-            const players = await getData(`players_${currentEventId}`) || {};
+            const players = await getDataOnce(`players_${currentEventId}`) || {};
             
             const duplicate = Object.values(players).some(p => 
-                p.firstName === firstName && 
-                p.lastName === lastName && 
-                p.ageGroup === currentAgeGroup
+                p.firstName === firstName && p.lastName === lastName && p.ageGroup === currentAgeGroup
             );
             
             if (duplicate) {
@@ -922,29 +993,25 @@
             }
             
             const newId = Date.now().toString();
-            const newPlayer = {
-                id: newId,
-                firstName: firstName,
-                lastName: lastName,
-                dob: document.getElementById(`dob_${modalId}`).value || '',
-                phoneNumber: document.getElementById(`phone_${modalId}`).value || '',
-                parentName: document.getElementById(`parent_${modalId}`).value || '',
-                email: document.getElementById(`email_${modalId}`).value || '',
-                clubHistory: document.getElementById(`club_${modalId}`).value || '',
-                position: document.getElementById(`pos_${modalId}`).value || '',
-                field: document.getElementById(`field_${modalId}`).value || '',
-                jersey: document.getElementById(`jersey_${modalId}`).value || '',
-                medicalConditions: document.getElementById(`med_${modalId}`).value || '',
-                rating: document.getElementById(`rating_${modalId}`).value || '',
-                status: document.getElementById(`status_${modalId}`).value,
-                assignedTeam: document.getElementById(`team_${modalId}`).value || '',
-                notes: document.getElementById(`notes_${modalId}`).value || 'Walk-up registration',
-                ageGroup: currentAgeGroup
-            };
-            
-            players[newId] = newPlayer;
-            await setData(`players_${currentEventId}`, players);
-            await loadPlayersForEvent();
+            await updateData(`players_${currentEventId}`, {
+                [newId]: {
+                    id: newId, firstName, lastName,
+                    dob: document.getElementById(`dob_${modalId}`).value || '',
+                    phoneNumber: document.getElementById(`phone_${modalId}`).value || '',
+                    parentName: document.getElementById(`parent_${modalId}`).value || '',
+                    email: document.getElementById(`email_${modalId}`).value || '',
+                    clubHistory: document.getElementById(`club_${modalId}`).value || '',
+                    position: document.getElementById(`pos_${modalId}`).value || '',
+                    field: document.getElementById(`field_${modalId}`).value || '',
+                    jersey: document.getElementById(`jersey_${modalId}`).value || '',
+                    medicalConditions: document.getElementById(`med_${modalId}`).value || '',
+                    rating: document.getElementById(`rating_${modalId}`).value || '',
+                    status: document.getElementById(`status_${modalId}`).value,
+                    assignedTeam: document.getElementById(`team_${modalId}`).value || '',
+                    notes: document.getElementById(`notes_${modalId}`).value || 'Walk-up registration',
+                    ageGroup: currentAgeGroup
+                }
+            });
             alert(`✅ ${firstName} ${lastName} added to ${currentAgeGroup}!`);
         });
     }
@@ -1000,14 +1067,10 @@
     function showLoginScreen() { document.getElementById('loginContainer').style.display = 'flex'; document.getElementById('signupContainer').style.display = 'none'; document.getElementById('mainApp').style.display = 'none'; }
     function showSignupScreen() { document.getElementById('loginContainer').style.display = 'none'; document.getElementById('signupContainer').style.display = 'flex'; document.getElementById('mainApp').style.display = 'none'; }
     function showMainApp() { document.getElementById('loginContainer').style.display = 'none'; document.getElementById('signupContainer').style.display = 'none'; document.getElementById('mainApp').style.display = 'block'; document.getElementById('userEmail').textContent = currentUser?.email || ''; }
-    function handleLogout() { auth.signOut(); }
-    
-    // Sort handler
-    function initSortHandlers() {
-        document.querySelectorAll('th[data-sort]').forEach(th => {
-            th.removeEventListener('click', sortClickHandler);
-            th.addEventListener('click', sortClickHandler);
-        });
+    function handleLogout() { 
+        if (playersListener) playersListener.off();
+        if (eventsListener) eventsListener.off();
+        auth.signOut(); 
     }
     
     function sortClickHandler() {
@@ -1019,7 +1082,14 @@
             sortAsc = true;
         }
         renderTryoutTable();
-        initSortHandlers();
+    }
+    
+    // Initialize sort handlers
+    function initSortHandlers() {
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+            th.removeEventListener('click', sortClickHandler);
+            th.addEventListener('click', sortClickHandler);
+        });
     }
     
     // Event listeners
@@ -1031,6 +1101,7 @@
     document.getElementById('openEventManagerBtn').onclick = openEventManager;
     document.getElementById('addWalkupBtn').onclick = addWalkup;
     document.getElementById('clearFiltersBtn').onclick = clearFilters;
+    document.getElementById('exportBtn').onclick = exportToExcel;
     document.getElementById('importSpreadsheetBtn').onclick = () => { 
         const inp = document.createElement('input'); 
         inp.type = 'file'; 
@@ -1038,8 +1109,15 @@
         inp.onchange = e => { if (e.target.files[0]) importSpreadsheet(e.target.files[0]); }; 
         inp.click(); 
     };
-    document.getElementById('eventSelect').onchange = (e) => { currentEventId = e.target.value; loadEvents(); };
-    document.getElementById('ageGroupSelect').onchange = (e) => { currentAgeGroup = e.target.value; loadPlayersForEvent(); };
+    document.getElementById('eventSelect').onchange = (e) => { 
+        currentEventId = e.target.value; 
+        loadEvents(); 
+        setupRealtimeListeners();
+    };
+    document.getElementById('ageGroupSelect').onchange = (e) => { 
+        currentAgeGroup = e.target.value; 
+        setupRealtimeListeners();
+    };
     document.getElementById('unassignedRatingFilter')?.addEventListener('change', () => renderUnassignedPool());
     document.getElementById('unassignedStatusFilter')?.addEventListener('change', () => renderUnassignedPool());
     document.getElementById('unassignedSearchFilter')?.addEventListener('input', () => renderUnassignedPool());
@@ -1065,6 +1143,7 @@
         if (user) {
             showMainApp();
             await loadEvents();
+            setupRealtimeListeners();
         } else {
             showLoginScreen();
         }
