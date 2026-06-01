@@ -10,11 +10,12 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
     <!-- Drag & Drop -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-    <!-- SheetJS for Excel import/export -->
+    <!-- SheetJS -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
+        /* Same styles as before */
         * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
         body { background: #f0f7ff; margin: 0; padding: 20px; transition: all 0.2s; }
         
@@ -29,13 +30,10 @@
         #mainApp { display: none; }
         .app-container { max-width: 1600px; margin: 0 auto; }
         
-        /* Real-time indicator */
         .sync-status { display: flex; align-items: center; gap: 6px; background: #dcfce7; padding: 4px 12px; border-radius: 20px; font-size: 0.7rem; }
         .sync-status.connecting { background: #fef3c7; }
         .sync-status.offline { background: #ffe4e2; }
         .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite; }
-        .sync-status.connecting .sync-dot { background: #eab308; }
-        .sync-status.offline .sync-dot { background: #ef4444; animation: none; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
         
         body.compact-view .selection-bar { padding: 8px 16px; margin-bottom: 12px; }
@@ -77,6 +75,16 @@
         th:hover { background: #e2e8f0; }
         td { padding: 12px 8px; border-bottom: 1px solid #e2e8f0; }
         .sort-indicator { margin-left: 5px; font-size: 0.7rem; display: inline-block; }
+        
+        input, select, textarea { border-radius: 12px !important; border: 1px solid #cbd5e1; padding: 6px 8px; }
+        .inline-edit, .rating-select, .team-select, .status-select { border-radius: 12px !important; }
+        
+        .status-evaluate { background: #fef9e3 !important; color: #b45309 !important; }
+        .status-offered { background: #e0f2fe !important; color: #0369a1 !important; }
+        .status-committed { background: #dcfce7 !important; color: #15803d !important; }
+        .status-declined { background: #ffe4e2 !important; color: #b91c1c !important; }
+        .status-not-offering { background: #f3f4f6 !important; color: #4b5563 !important; }
+        
         .roster-grid { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 30px; }
         .team-col { flex: 1; min-width: 260px; background: #fefcf5; border-radius: 28px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); border-top: 8px solid; padding: 16px; }
         .team-ecnl { border-top-color: #2c7da0; }
@@ -100,7 +108,10 @@
         .modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
         .user-badge { background: #e0f2fe; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; display: flex; align-items: center; gap: 8px; }
         .view-toggle { display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 4px 12px; border-radius: 40px; cursor: pointer; }
-        .sync-status { display: flex; align-items: center; gap: 6px; background: #dcfce7; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; }
+        
+        /* Debug toast */
+        .debug-toast { position: fixed; bottom: 20px; right: 20px; background: #1e3c72; color: white; padding: 8px 16px; border-radius: 8px; font-size: 12px; z-index: 9999; animation: fadeOut 3s ease-in-out; }
+        @keyframes fadeOut { 0% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
     </style>
 </head>
 <body class="comfort-view">
@@ -264,7 +275,6 @@
     // Initialize Firebase
     let db, auth;
     let playersListener = null;
-    let eventsListener = null;
     
     try {
         if (!firebase.apps.length) {
@@ -288,18 +298,37 @@
     let currentAgeGroups = [];
     let sortableInstances = [];
     let unassignedSortable = null;
-    let isUpdatingFromSync = false; // Prevent circular updates
+    let isUpdatingFromSync = false;
     
     const TEAM_OPTIONS = ["ECNL", "ECNL-RL", "Gold", "Not Offering"];
     const RATING_OPTIONS = ["Elite", "Premier", "Competitive", "Recreational"];
     const STATUS_OPTIONS = ["Evaluate", "Offered", "Committed", "Declined", "Not Offering"];
+    
+    function showDebug(message) {
+        console.log("[DEBUG]", message);
+        const toast = document.createElement('div');
+        toast.className = 'debug-toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
     
     function escapeHtml(str) { if (!str) return ''; return String(str).replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m])); }
     function getRatingIcon(r) { const icons = { Elite:'⭐', Premier:'🏅', Competitive:'⚡', Recreational:'🌿' }; return icons[r] || ''; }
     function getRatingColor(r) { const colors = { Elite:'#d4af37', Premier:'#a0c4ff', Competitive:'#9bf6b4', Recreational:'#bdb2ff' }; return colors[r] || '#ddd'; }
     function getStatusIcon(s) { const icons = { Evaluate:'🔍', Offered:'📋', Committed:'✅', Declined:'❌', 'Not Offering':'🚫' }; return icons[s] || ''; }
     
-    // Update sync status indicator
+    function getStatusClass(status) {
+        const classes = { 
+            Evaluate: 'status-evaluate', 
+            Offered: 'status-offered', 
+            Committed: 'status-committed', 
+            Declined: 'status-declined', 
+            'Not Offering': 'status-not-offering' 
+        };
+        return classes[status] || '';
+    }
+    
     function updateSyncStatus(connected) {
         const statusDiv = document.getElementById('syncStatus');
         if (connected) {
@@ -311,7 +340,6 @@
         }
     }
     
-    // Compact/Comfort View Toggle
     function initViewToggle() {
         const checkbox = document.getElementById('compactViewToggle');
         const body = document.body;
@@ -339,64 +367,92 @@
         });
     }
     
-    // Database helpers
-    async function setData(path, val) { 
-        if (!db || !currentUser) return; 
-        await db.ref(path).set(val); 
-    }
+    async function setData(path, val) { if (!db || !currentUser) return; await db.ref(path).set(val); }
+    async function updateData(path, val) { if (!db || !currentUser) return; await db.ref(path).update(val); }
+    async function deleteChild(path, id) { if (!db || !currentUser) return; await db.ref(`${path}/${id}`).set(null); }
+    async function getDataOnce(path) { if (!db || !currentUser) return null; const s = await db.ref(path).once('value'); return s.val(); }
     
-    async function updateData(path, val) { 
-        if (!db || !currentUser) return; 
-        await db.ref(path).update(val); 
-    }
-    
-    async function deleteChild(path, id) { 
-        if (!db || !currentUser) return; 
-        await db.ref(`${path}/${id}`).set(null); 
-    }
-    
-    // REAL-TIME LISTENERS
-    function setupRealtimeListeners() {
-        // Remove existing listeners
+    function setupRealtimeListener() {
         if (playersListener) {
             playersListener.off();
         }
-        if (eventsListener) {
-            eventsListener.off();
-        }
         
-        if (!currentUser || !currentEventId || !currentAgeGroup) return;
+        if (!currentUser || !currentEventId) return;
         
-        // Listen for player changes in real-time
         const playersRef = db.ref(`players_${currentEventId}`);
         playersListener = playersRef.on('value', (snapshot) => {
             if (isUpdatingFromSync) return;
             const data = snapshot.val() || {};
-            const newPlayers = Object.values(data).filter(p => p.ageGroup === currentAgeGroup).map(p => ({...p, jersey: p.jersey||'', field: p.field||'', rating: p.rating||''}));
             
-            // Check if data actually changed
+            const newPlayers = Object.values(data)
+                .filter(p => p.ageGroup === currentAgeGroup)
+                .map(p => ({...p, jersey: p.jersey||'', field: p.field||'', rating: p.rating||''}));
+            
             if (JSON.stringify(allPlayers) !== JSON.stringify(newPlayers)) {
                 allPlayers = newPlayers;
                 renderCurrentView();
-                // Show brief visual feedback that sync occurred
                 const statusDiv = document.getElementById('syncStatus');
-                statusDiv.style.background = '#bbf7d0';
-                setTimeout(() => { if (statusDiv) statusDiv.style.background = ''; }, 500);
+                if (statusDiv) {
+                    statusDiv.style.background = '#bbf7d0';
+                    setTimeout(() => { if (statusDiv) statusDiv.style.background = ''; }, 500);
+                }
             }
         });
         
-        // Monitor connection status
         db.ref('.info/connected').on('value', (snap) => {
             updateSyncStatus(snap.val());
         });
     }
     
-    function showModal(title, html, onConfirm) {
-        let d = document.createElement('div'); d.className = 'modal';
+    async function refreshPlayersForCurrentAgeGroup() {
+        if (!currentEventId || !currentAgeGroup) {
+            allPlayers = [];
+            renderCurrentView();
+            return;
+        }
+        
+        const data = await getDataOnce(`players_${currentEventId}`) || {};
+        const newPlayers = Object.values(data)
+            .filter(p => p.ageGroup === currentAgeGroup)
+            .map(p => ({...p, jersey: p.jersey||'', field: p.field||'', rating: p.rating||''}));
+        
+        allPlayers = newPlayers;
+        renderCurrentView();
+    }
+    
+    function showModal(title, html, onConfirm, onCancel) {
+        let d = document.createElement('div'); 
+        d.className = 'modal';
         d.innerHTML = `<div class="modal-card"><h2>${title}</h2>${html}<div class="modal-actions"><button id="modalCancelBtn" class="btn btn-outline">Cancel</button><button id="modalConfirmBtn" class="btn">Confirm</button></div></div>`;
         document.body.appendChild(d);
-        d.querySelector('#modalCancelBtn').onclick = () => d.remove();
-        d.querySelector('#modalConfirmBtn').onclick = () => { onConfirm(d); d.remove(); };
+        
+        const confirmBtn = d.querySelector('#modalConfirmBtn');
+        const cancelBtn = d.querySelector('#modalCancelBtn');
+        
+        const handleKeydown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                confirmBtn.click();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelBtn.click();
+            }
+        };
+        
+        document.addEventListener('keydown', handleKeydown);
+        
+        confirmBtn.onclick = () => {
+            document.removeEventListener('keydown', handleKeydown);
+            onConfirm(d);
+            d.remove();
+        };
+        
+        cancelBtn.onclick = () => {
+            document.removeEventListener('keydown', handleKeydown);
+            if (onCancel) onCancel(d);
+            d.remove();
+        };
+        
         return d;
     }
     
@@ -426,7 +482,6 @@
                     refreshEvents(); 
                     refreshAgeGroups(); 
                     loadEvents(); 
-                    setupRealtimeListeners();
                 };
             });
         }
@@ -520,27 +575,47 @@
         refreshAgeGroups();
     }
     
-    // Helper for one-time data fetch
-    async function getDataOnce(path) { 
-        if (!db || !currentUser) return null; 
-        const s = await db.ref(path).once('value'); 
-        return s.val(); 
-    }
-    
-    // Update player field with real-time sync
-    async function updatePlayerField(id, field, value) {
-        if (!currentEventId) return;
-        if (isUpdatingFromSync) return;
+    // FIXED: Direct save function with better debugging
+    async function savePlayerData(id, playerData) {
+        if (!currentEventId) {
+            showDebug("No event selected");
+            return false;
+        }
+        
+        if (isUpdatingFromSync) {
+            showDebug("Already updating from sync");
+            return false;
+        }
         
         try {
             isUpdatingFromSync = true;
-            await updateData(`players_${currentEventId}/${id}`, { [field]: value });
-            console.log(`Updated ${field} to "${value}" for player ${id}`);
+            showDebug(`Saving data for player ${id}...`);
+            
+            await updateData(`players_${currentEventId}/${id}`, playerData);
+            showDebug(`✅ Successfully saved player ${id}`);
+            
+            // Update local array immediately
+            const idx = allPlayers.findIndex(p => p.id === id);
+            if (idx !== -1) {
+                allPlayers[idx] = { ...allPlayers[idx], ...playerData };
+            }
+            
+            // Refresh the view
+            renderCurrentView();
+            return true;
         } catch (error) {
-            console.error("Error updating player field:", error);
+            showDebug(`❌ Error saving: ${error.message}`);
+            console.error("Error saving player:", error);
+            return false;
         } finally {
             isUpdatingFromSync = false;
         }
+    }
+    
+    // Updated updatePlayerField to use the new save function
+    async function updatePlayerField(id, field, value) {
+        if (!currentEventId) return;
+        await savePlayerData(id, { [field]: value });
     }
     
     async function loadEvents() {
@@ -563,12 +638,21 @@
         const ageSelect = document.getElementById('ageGroupSelect');
         ageSelect.innerHTML = '<option value="">Select age group</option>';
         currentAgeGroups.forEach(ag => { let opt = document.createElement('option'); opt.value = ag; opt.textContent = ag; ageSelect.appendChild(opt); });
-        if (currentAgeGroup && currentAgeGroups.includes(currentAgeGroup)) ageSelect.value = currentAgeGroup;
-        else if (currentAgeGroups.length > 0) { currentAgeGroup = currentAgeGroups[0]; ageSelect.value = currentAgeGroup; }
-        else currentAgeGroup = null;
         
-        // Set up real-time listeners for the new event/age group
-        setupRealtimeListeners();
+        if (!currentAgeGroup && currentAgeGroups.length > 0) {
+            currentAgeGroup = currentAgeGroups[0];
+            ageSelect.value = currentAgeGroup;
+        } else if (currentAgeGroup && currentAgeGroups.includes(currentAgeGroup)) {
+            ageSelect.value = currentAgeGroup;
+        } else if (currentAgeGroups.length > 0) {
+            currentAgeGroup = currentAgeGroups[0];
+            ageSelect.value = currentAgeGroup;
+        } else {
+            currentAgeGroup = null;
+        }
+        
+        setupRealtimeListener();
+        await refreshPlayersForCurrentAgeGroup();
     }
     
     function renderCurrentView() {
@@ -576,9 +660,15 @@
         else renderRosterBuilder();
     }
     
+    // FIXED: Player detail modal with working save
     window.openPlayerDetail = async function(id) {
         const p = allPlayers.find(p => p.id === id);
-        if (!p) return;
+        if (!p) {
+            showDebug(`Player ${id} not found`);
+            return;
+        }
+        
+        showDebug(`Opening detail for ${p.firstName} ${p.lastName}`);
         
         let html = `<div class="form-row"><div class="form-group"><label>First Name</label><input id="efn" value="${escapeHtml(p.firstName)}"></div>
                     <div class="form-group"><label>Last Name</label><input id="eln" value="${escapeHtml(p.lastName)}"></div></div>
@@ -597,39 +687,55 @@
                     <div class="form-group"><label>Notes</label><textarea id="enotes" rows="2">${escapeHtml(p.notes||'')}</textarea></div>
                     <hr><button type="button" id="delPlayerBtn" class="btn btn-danger" style="width:100%">Delete Player</button>`;
         
-        showModal("Edit Player", html, async () => {
-            if (isUpdatingFromSync) return;
-            isUpdatingFromSync = true;
-            try {
-                await updateData(`players_${currentEventId}/${id}`, {
-                    firstName: document.getElementById('efn').value,
-                    lastName: document.getElementById('eln').value,
-                    dob: document.getElementById('edob').value,
-                    phoneNumber: document.getElementById('ephone').value,
-                    parentName: document.getElementById('eparent').value,
-                    email: document.getElementById('eemail').value,
-                    clubHistory: document.getElementById('eclub').value,
-                    position: document.getElementById('epos').value,
-                    jersey: document.getElementById('ejersey').value,
-                    field: document.getElementById('efield').value,
-                    medicalConditions: document.getElementById('emed').value,
-                    rating: document.getElementById('erating').value,
-                    status: document.getElementById('estatus').value,
-                    assignedTeam: document.getElementById('eteam').value,
-                    notes: document.getElementById('enotes').value
-                });
-            } finally {
-                isUpdatingFromSync = false;
+        showModal("Edit Player", html, async (modal) => {
+            if (isUpdatingFromSync) {
+                showDebug("Sync in progress, please wait");
+                return;
+            }
+            
+            // Collect all form values
+            const updatedData = {
+                firstName: document.getElementById('efn').value,
+                lastName: document.getElementById('eln').value,
+                dob: document.getElementById('edob').value,
+                phoneNumber: document.getElementById('ephone').value,
+                parentName: document.getElementById('eparent').value,
+                email: document.getElementById('eemail').value,
+                clubHistory: document.getElementById('eclub').value,
+                position: document.getElementById('epos').value,
+                jersey: document.getElementById('ejersey').value,
+                field: document.getElementById('efield').value,
+                medicalConditions: document.getElementById('emed').value,
+                rating: document.getElementById('erating').value,
+                status: document.getElementById('estatus').value,
+                assignedTeam: document.getElementById('eteam').value,
+                notes: document.getElementById('enotes').value
+            };
+            
+            showDebug(`Saving: ${updatedData.firstName} ${updatedData.lastName}`);
+            
+            const success = await savePlayerData(id, updatedData);
+            if (success) {
+                showDebug(`✅ Saved successfully!`);
+            } else {
+                alert("Error saving player data. Check console for details.");
             }
         });
         
+        // Attach delete handler after modal is created
         setTimeout(() => {
             const delBtn = document.getElementById('delPlayerBtn');
-            if (delBtn) delBtn.onclick = async () => {
-                if (confirm(`Delete ${p.firstName} ${p.lastName}?`)) {
-                    await deleteChild(`players_${currentEventId}`, id);
-                }
-            };
+            if (delBtn) {
+                delBtn.onclick = async () => {
+                    if (confirm(`Delete ${p.firstName} ${p.lastName} permanently?`)) {
+                        await deleteChild(`players_${currentEventId}`, id);
+                        const modal = document.querySelector('.modal');
+                        if (modal) modal.remove();
+                        await refreshPlayersForCurrentAgeGroup();
+                        showDebug(`Deleted ${p.firstName} ${p.lastName}`);
+                    }
+                };
+            }
         }, 100);
     };
     
@@ -676,13 +782,42 @@
             row.insertCell(2).innerHTML = `<a href="#" class="player-link" data-id="${p.id}">${escapeHtml(p.firstName)}</a>`;
             row.insertCell(3).innerHTML = `<a href="#" class="player-link" data-id="${p.id}">${escapeHtml(p.lastName)}</a>`;
             row.insertCell(4).innerHTML = `<input type="text" value="${escapeHtml(p.clubHistory)}" data-id="${p.id}" data-field="clubHistory" class="inline-edit" style="min-width:120px">`;
-            row.insertCell(5).innerHTML = `<select data-id="${p.id}" data-field="rating" class="rating-select" style="background:${getRatingColor(p.rating)}"><option value="">Select Rating</option>${RATING_OPTIONS.map(r => `<option ${p.rating===r?'selected':''} value="${r}">${getRatingIcon(r)} ${r}</option>`).join('')}</select>`;
-            row.insertCell(6).innerHTML = `<select data-id="${p.id}" data-field="assignedTeam" class="team-select" style="min-width:110px"><option value="">Select Team</option>${TEAM_OPTIONS.map(t => `<option ${p.assignedTeam===t?'selected':''} value="${t}">${t}</option>`).join('')}</select>`;
-            row.insertCell(7).innerHTML = `<select data-id="${p.id}" data-field="status" class="status-select">${STATUS_OPTIONS.map(s => `<option ${p.status===s?'selected':''} value="${s}">${getStatusIcon(s)} ${s}</option>`).join('')}</select>`;
+            row.insertCell(5).innerHTML = `<select data-id="${p.id}" data-field="rating" class="rating-select" style="background:${getRatingColor(p.rating)}; border-radius:12px;"><option value="">Select Rating</option>${RATING_OPTIONS.map(r => `<option ${p.rating===r?'selected':''} value="${r}">${getRatingIcon(r)} ${r}</option>`).join('')}</select>`;
+            row.insertCell(6).innerHTML = `<select data-id="${p.id}" data-field="assignedTeam" class="team-select" style="min-width:110px; border-radius:12px;"><option value="">Select Team</option>${TEAM_OPTIONS.map(t => `<option ${p.assignedTeam===t?'selected':''} value="${t}">${t}</option>`).join('')}</select>`;
+            
+            const statusCell = row.insertCell(7);
+            const statusSelect = document.createElement('select');
+            statusSelect.setAttribute('data-id', p.id);
+            statusSelect.setAttribute('data-field', 'status');
+            statusSelect.className = `status-select ${getStatusClass(p.status)}`;
+            statusSelect.style.borderRadius = '12px';
+            statusSelect.style.padding = '6px 8px';
+            
+            STATUS_OPTIONS.forEach(s => {
+                const option = document.createElement('option');
+                option.value = s;
+                option.textContent = `${getStatusIcon(s)} ${s}`;
+                if (p.status === s) option.selected = true;
+                statusSelect.appendChild(option);
+            });
+            
+            statusSelect.addEventListener('change', function(e) {
+                const newStatus = this.value;
+                this.className = `status-select ${getStatusClass(newStatus)}`;
+                handleInlineChange(e);
+            });
+            
+            statusCell.appendChild(statusSelect);
+            
             row.insertCell(8).innerHTML = `<input type="text" value="${escapeHtml(p.notes)}" data-id="${p.id}" data-field="notes" class="inline-edit" style="min-width:120px">`;
         }
         
-        document.querySelectorAll('.inline-edit, .rating-select, .team-select, .status-select').forEach(el => {
+        document.querySelectorAll('.inline-edit, .rating-select, .team-select').forEach(el => {
+            el.removeEventListener('change', handleInlineChange);
+            el.addEventListener('change', handleInlineChange);
+        });
+        
+        document.querySelectorAll('.status-select').forEach(el => {
             el.removeEventListener('change', handleInlineChange);
             el.addEventListener('change', handleInlineChange);
         });
@@ -785,7 +920,6 @@
         }});
     }
     
-    // Export function
     async function exportToExcel() {
         if (!currentEventId || !currentAgeGroup) {
             alert("Please select an event and age group first");
@@ -842,7 +976,6 @@
         }
     }
     
-    // Import spreadsheet
     async function importSpreadsheet(file) {
         if (!currentEventId || !currentAgeGroup) { 
             alert("Please select an event and age group first"); 
@@ -936,7 +1069,6 @@
         }
     }
     
-    // Add walk-up player
     async function addWalkup() {
         if (!currentEventId || !currentAgeGroup) { 
             alert("Please select an event and age group first"); 
@@ -1069,7 +1201,6 @@
     function showMainApp() { document.getElementById('loginContainer').style.display = 'none'; document.getElementById('signupContainer').style.display = 'none'; document.getElementById('mainApp').style.display = 'block'; document.getElementById('userEmail').textContent = currentUser?.email || ''; }
     function handleLogout() { 
         if (playersListener) playersListener.off();
-        if (eventsListener) eventsListener.off();
         auth.signOut(); 
     }
     
@@ -1084,7 +1215,6 @@
         renderTryoutTable();
     }
     
-    // Initialize sort handlers
     function initSortHandlers() {
         document.querySelectorAll('th[data-sort]').forEach(th => {
             th.removeEventListener('click', sortClickHandler);
@@ -1109,15 +1239,20 @@
         inp.onchange = e => { if (e.target.files[0]) importSpreadsheet(e.target.files[0]); }; 
         inp.click(); 
     };
-    document.getElementById('eventSelect').onchange = (e) => { 
+    
+    document.getElementById('eventSelect').onchange = async (e) => { 
         currentEventId = e.target.value; 
-        loadEvents(); 
-        setupRealtimeListeners();
+        await loadEvents();
+        await refreshPlayersForCurrentAgeGroup();
     };
-    document.getElementById('ageGroupSelect').onchange = (e) => { 
-        currentAgeGroup = e.target.value; 
-        setupRealtimeListeners();
+    
+    document.getElementById('ageGroupSelect').onchange = async (e) => { 
+        currentAgeGroup = e.target.value;
+        console.log("Age group changed to:", currentAgeGroup);
+        await refreshPlayersForCurrentAgeGroup();
+        setupRealtimeListener();
     };
+    
     document.getElementById('unassignedRatingFilter')?.addEventListener('change', () => renderUnassignedPool());
     document.getElementById('unassignedStatusFilter')?.addEventListener('change', () => renderUnassignedPool());
     document.getElementById('unassignedSearchFilter')?.addEventListener('input', () => renderUnassignedPool());
@@ -1143,7 +1278,6 @@
         if (user) {
             showMainApp();
             await loadEvents();
-            setupRealtimeListeners();
         } else {
             showLoginScreen();
         }
