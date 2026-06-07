@@ -15,7 +15,6 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        /* Same styles as before */
         * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
         body { background: #f0f7ff; margin: 0; padding: 20px; transition: all 0.2s; }
         
@@ -109,7 +108,6 @@
         .user-badge { background: #e0f2fe; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; display: flex; align-items: center; gap: 8px; }
         .view-toggle { display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 4px 12px; border-radius: 40px; cursor: pointer; }
         
-        /* Debug toast */
         .debug-toast { position: fixed; bottom: 20px; right: 20px; background: #1e3c72; color: white; padding: 8px 16px; border-radius: 8px; font-size: 12px; z-index: 9999; animation: fadeOut 3s ease-in-out; }
         @keyframes fadeOut { 0% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
     </style>
@@ -575,7 +573,7 @@
         refreshAgeGroups();
     }
     
-    // FIXED: Direct save function with better debugging
+    // FIXED: Save function that works for both edit and create
     async function savePlayerData(id, playerData) {
         if (!currentEventId) {
             showDebug("No event selected");
@@ -594,7 +592,7 @@
             await updateData(`players_${currentEventId}/${id}`, playerData);
             showDebug(`✅ Successfully saved player ${id}`);
             
-            // Update local array immediately
+            // Update local array if this is an existing player
             const idx = allPlayers.findIndex(p => p.id === id);
             if (idx !== -1) {
                 allPlayers[idx] = { ...allPlayers[idx], ...playerData };
@@ -612,7 +610,40 @@
         }
     }
     
-    // Updated updatePlayerField to use the new save function
+    // FIXED: Create new player function
+    async function createNewPlayer(playerData) {
+        if (!currentEventId) {
+            showDebug("No event selected");
+            return false;
+        }
+        
+        if (isUpdatingFromSync) {
+            showDebug("Already updating from sync");
+            return false;
+        }
+        
+        try {
+            isUpdatingFromSync = true;
+            const newId = Date.now().toString();
+            showDebug(`Creating new player: ${playerData.firstName} ${playerData.lastName}`);
+            
+            await updateData(`players_${currentEventId}`, {
+                [newId]: { ...playerData, id: newId }
+            });
+            showDebug(`✅ Successfully created player with ID: ${newId}`);
+            
+            // Refresh the view
+            await refreshPlayersForCurrentAgeGroup();
+            return true;
+        } catch (error) {
+            showDebug(`❌ Error creating player: ${error.message}`);
+            console.error("Error creating player:", error);
+            return false;
+        } finally {
+            isUpdatingFromSync = false;
+        }
+    }
+    
     async function updatePlayerField(id, field, value) {
         if (!currentEventId) return;
         await savePlayerData(id, { [field]: value });
@@ -660,7 +691,7 @@
         else renderRosterBuilder();
     }
     
-    // FIXED: Player detail modal with working save
+    // Player detail modal - EDIT existing player
     window.openPlayerDetail = async function(id) {
         const p = allPlayers.find(p => p.id === id);
         if (!p) {
@@ -693,7 +724,6 @@
                 return;
             }
             
-            // Collect all form values
             const updatedData = {
                 firstName: document.getElementById('efn').value,
                 lastName: document.getElementById('eln').value,
@@ -713,7 +743,6 @@
             };
             
             showDebug(`Saving: ${updatedData.firstName} ${updatedData.lastName}`);
-            
             const success = await savePlayerData(id, updatedData);
             if (success) {
                 showDebug(`✅ Saved successfully!`);
@@ -722,7 +751,6 @@
             }
         });
         
-        // Attach delete handler after modal is created
         setTimeout(() => {
             const delBtn = document.getElementById('delPlayerBtn');
             if (delBtn) {
@@ -738,6 +766,90 @@
             }
         }, 100);
     };
+    
+    // FIXED: Add walk-up player modal - CREATE new player
+    async function addWalkup() {
+        if (!currentEventId || !currentAgeGroup) { 
+            alert("Please select an event and age group first"); 
+            return; 
+        }
+        
+        showDebug("Opening walk-up player form");
+        
+        let html = `<div class="form-row"><div class="form-group"><label>First Name *</label><input id="fn" required></div>
+                    <div class="form-group"><label>Last Name *</label><input id="ln" required></div></div>
+                    <div class="form-row"><div class="form-group"><label>DOB</label><input id="dob" placeholder="YYYY-MM-DD"></div>
+                    <div class="form-group"><label>Phone</label><input id="phone"></div></div>
+                    <div class="form-group"><label>Parent Name</label><input id="parent"></div>
+                    <div class="form-group"><label>Email</label><input id="email" type="email"></div>
+                    <div class="form-group"><label>Club History</label><input id="club"></div>
+                    <div class="form-group"><label>Position</label><input id="pos"></div>
+                    <div class="form-row"><div class="form-group"><label>Jersey Number</label><input id="jersey" placeholder="Tryout jersey #"></div>
+                    <div class="form-group"><label>Field</label><input id="field" placeholder="Field #"></div></div>
+                    <div class="form-group"><label>Medical Conditions</label><textarea id="med" rows="2"></textarea></div>
+                    <div class="form-row"><div class="form-group"><label>Rating</label>
+                        <select id="rating"><option value="">Select Rating</option>${RATING_OPTIONS.map(r=>`<option>${r}</option>`).join('')}</select>
+                    </div>
+                    <div class="form-group"><label>Status</label>
+                        <select id="status">${STATUS_OPTIONS.map(s=>`<option>${s}</option>`).join('')}</select>
+                    </div></div>
+                    <div class="form-group"><label>Team</label>
+                        <select id="team"><option value=""></option>${TEAM_OPTIONS.map(t=>`<option>${t}</option>`).join('')}</select>
+                    </div>
+                    <div class="form-group"><label>Notes</label><textarea id="notes" rows="2"></textarea></div>
+                    <div class="form-group" style="background:#e0f2fe; padding:10px; border-radius:12px;">
+                        <strong>Will be added to:</strong> ${escapeHtml(currentAgeGroup)}
+                    </div>`;
+        
+        showModal("Add Walk-up Player", html, async () => {
+            const firstName = document.getElementById('fn').value.trim();
+            const lastName = document.getElementById('ln').value.trim();
+            
+            if (!firstName || !lastName) { 
+                alert("First and last name are required"); 
+                return; 
+            }
+            
+            // Check for duplicate in current age group
+            const duplicate = allPlayers.some(p => 
+                p.firstName === firstName && 
+                p.lastName === lastName
+            );
+            
+            if (duplicate) {
+                alert(`A player named ${firstName} ${lastName} already exists in ${currentAgeGroup}. Duplicate not added.`);
+                return;
+            }
+            
+            const newPlayerData = {
+                firstName: firstName,
+                lastName: lastName,
+                dob: document.getElementById('dob').value || '',
+                phoneNumber: document.getElementById('phone').value || '',
+                parentName: document.getElementById('parent').value || '',
+                email: document.getElementById('email').value || '',
+                clubHistory: document.getElementById('club').value || '',
+                position: document.getElementById('pos').value || '',
+                field: document.getElementById('field').value || '',
+                jersey: document.getElementById('jersey').value || '',
+                medicalConditions: document.getElementById('med').value || '',
+                rating: document.getElementById('rating').value || '',
+                status: document.getElementById('status').value,
+                assignedTeam: document.getElementById('team').value || '',
+                notes: document.getElementById('notes').value || 'Walk-up registration',
+                ageGroup: currentAgeGroup
+            };
+            
+            showDebug(`Creating new player: ${firstName} ${lastName}`);
+            const success = await createNewPlayer(newPlayerData);
+            if (success) {
+                showDebug(`✅ ${firstName} ${lastName} added to ${currentAgeGroup}!`);
+                alert(`✅ ${firstName} ${lastName} added to ${currentAgeGroup}!`);
+            } else {
+                alert("Error adding player. Check console for details.");
+            }
+        });
+    }
     
     function handleInlineChange(e) {
         const id = e.target.getAttribute('data-id');
@@ -1067,85 +1179,6 @@
             console.error("Import error:", error);
             alert("Error importing file: " + error.message);
         }
-    }
-    
-    async function addWalkup() {
-        if (!currentEventId || !currentAgeGroup) { 
-            alert("Please select an event and age group first"); 
-            return; 
-        }
-        
-        const modalId = 'walkup-modal-' + Date.now();
-        
-        let html = `<div id="${modalId}">
-            <div class="form-row"><div class="form-group"><label>First Name *</label><input id="fn_${modalId}" required></div>
-            <div class="form-group"><label>Last Name *</label><input id="ln_${modalId}" required></div></div>
-            <div class="form-row"><div class="form-group"><label>DOB</label><input id="dob_${modalId}" placeholder="YYYY-MM-DD"></div>
-            <div class="form-group"><label>Phone</label><input id="phone_${modalId}"></div></div>
-            <div class="form-group"><label>Parent Name</label><input id="parent_${modalId}"></div>
-            <div class="form-group"><label>Email</label><input id="email_${modalId}" type="email"></div>
-            <div class="form-group"><label>Club History</label><input id="club_${modalId}"></div>
-            <div class="form-group"><label>Position</label><input id="pos_${modalId}"></div>
-            <div class="form-row"><div class="form-group"><label>Jersey Number</label><input id="jersey_${modalId}" placeholder="Tryout jersey #"></div>
-            <div class="form-group"><label>Field</label><input id="field_${modalId}" placeholder="Field #"></div></div>
-            <div class="form-group"><label>Medical Conditions</label><textarea id="med_${modalId}" rows="2"></textarea></div>
-            <div class="form-row"><div class="form-group"><label>Rating</label>
-                <select id="rating_${modalId}"><option value="">Select Rating</option>${RATING_OPTIONS.map(r=>`<option>${r}</option>`).join('')}</select>
-            </div>
-            <div class="form-group"><label>Status</label>
-                <select id="status_${modalId}">${STATUS_OPTIONS.map(s=>`<option>${s}</option>`).join('')}</select>
-            </div></div>
-            <div class="form-group"><label>Team</label>
-                <select id="team_${modalId}"><option value=""></option>${TEAM_OPTIONS.map(t=>`<option>${t}</option>`).join('')}</select>
-            </div>
-            <div class="form-group"><label>Notes</label><textarea id="notes_${modalId}" rows="2"></textarea></div>
-            <div class="form-group" style="background:#e0f2fe; padding:10px; border-radius:12px;">
-                <strong>Will be added to:</strong> ${escapeHtml(currentAgeGroup)}
-            </div>
-        </div>`;
-        
-        showModal("Add Walk-up Player", html, async () => {
-            const firstName = document.getElementById(`fn_${modalId}`).value.trim();
-            const lastName = document.getElementById(`ln_${modalId}`).value.trim();
-            
-            if (!firstName || !lastName) { 
-                alert("First and last name are required"); 
-                return; 
-            }
-            
-            const players = await getDataOnce(`players_${currentEventId}`) || {};
-            
-            const duplicate = Object.values(players).some(p => 
-                p.firstName === firstName && p.lastName === lastName && p.ageGroup === currentAgeGroup
-            );
-            
-            if (duplicate) {
-                alert(`A player named ${firstName} ${lastName} already exists in ${currentAgeGroup}. Duplicate not added.`);
-                return;
-            }
-            
-            const newId = Date.now().toString();
-            await updateData(`players_${currentEventId}`, {
-                [newId]: {
-                    id: newId, firstName, lastName,
-                    dob: document.getElementById(`dob_${modalId}`).value || '',
-                    phoneNumber: document.getElementById(`phone_${modalId}`).value || '',
-                    parentName: document.getElementById(`parent_${modalId}`).value || '',
-                    email: document.getElementById(`email_${modalId}`).value || '',
-                    clubHistory: document.getElementById(`club_${modalId}`).value || '',
-                    position: document.getElementById(`pos_${modalId}`).value || '',
-                    field: document.getElementById(`field_${modalId}`).value || '',
-                    jersey: document.getElementById(`jersey_${modalId}`).value || '',
-                    medicalConditions: document.getElementById(`med_${modalId}`).value || '',
-                    rating: document.getElementById(`rating_${modalId}`).value || '',
-                    status: document.getElementById(`status_${modalId}`).value,
-                    assignedTeam: document.getElementById(`team_${modalId}`).value || '',
-                    notes: document.getElementById(`notes_${modalId}`).value || 'Walk-up registration',
-                    ageGroup: currentAgeGroup
-                }
-            });
-            alert(`✅ ${firstName} ${lastName} added to ${currentAgeGroup}!`);
-        });
     }
     
     function filterClickHandler(e) {
